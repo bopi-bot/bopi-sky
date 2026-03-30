@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>sky sim</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { -webkit-font-smoothing: antialiased; font-family: 'Inter', system-ui, sans-serif; background: #000; overflow: hidden; height: 100vh; width: 100vw; }
+    canvas#sky { display: block; width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; image-rendering: auto; }
+    .overlay { position: fixed; z-index: 10; pointer-events: none; }
+    .overlay > * { pointer-events: auto; }
+    .hud {
+      position: fixed; top: 1.25rem; left: 50%; transform: translateX(-50%);
+      background: rgba(10,10,15,0.55); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-radius: 0.5rem; padding: 0.45rem 0.9rem; z-index: 10;
+      display: flex; gap: 1.25rem; align-items: center;
+    }
+    .hud span { font-size: 0.6875rem; color: rgba(255,255,255,0.4); text-transform: lowercase; letter-spacing: -0.01em; }
+    .hud b { color: rgba(255,255,255,0.8); font-weight: 500; }
+    .btn {
+      position: fixed; top: 1.25rem; right: 1.25rem;
+      background: rgba(10,10,15,0.5); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border: none; border-radius: 0.5rem; padding: 0.45rem 0.8rem;
+      color: rgba(255,255,255,0.5); font-family: 'Inter', system-ui, sans-serif;
+      font-size: 0.6875rem; text-transform: lowercase; cursor: pointer; z-index: 10;
+    }
+    .btn:hover { color: rgba(255,255,255,0.7); }
+    .panel {
+      position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%);
+      background: rgba(10,10,15,0.7); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+      border-radius: 0.75rem; padding: 0.7rem 0.9rem;
+      display: flex; flex-direction: column; gap: 0.45rem;
+      z-index: 10; min-width: 300px; max-width: calc(100vw - 1.5rem);
+    }
+    .r { display: flex; align-items: center; gap: 0.7rem; }
+    .r label { font-size: 0.625rem; color: rgba(255,255,255,0.42); text-transform: lowercase; min-width: 4rem; user-select: none; }
+    .r input[type=range] { flex: 1; -webkit-appearance: none; appearance: none; height: 2px; background: rgba(255,255,255,0.1); border-radius: 1px; outline: none; cursor: pointer; }
+    .r input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,0.85); cursor: pointer; }
+    .r .v { font-size: 0.5625rem; color: rgba(255,255,255,0.3); min-width: 3rem; text-align: right; font-variant-numeric: tabular-nums; user-select: none; }
+    @media(max-width:480px) { .panel { min-width: 0; padding: 0.55rem 0.65rem; } .r label { min-width: 3.25rem; font-size: 0.5625rem; } }
+  </style>
+</head>
+<body>
+<canvas id="sky"></canvas>
+<div class="hud"><span>sun <b id="he">45</b> deg</span><span><b id="ht">12:00</b></span><span><b id="hl">21.0</b> lat</span></div>
+<button class="btn" id="pb">play day cycle</button>
+<div class="panel">
+  <div class="r"><label>time</label><input type="range" id="ct" min="0" max="24" step="0.02" value="12"><div class="v" id="vt">12:00</div></div>
+  <div class="r"><label>latitude</label><input type="range" id="cl" min="-90" max="90" step="0.5" value="21"><div class="v" id="vl">21.0</div></div>
+  <div class="r"><label>turbidity</label><input type="range" id="cb" min="1" max="10" step="0.1" value="3"><div class="v" id="vb">3.0</div></div>
+  <div class="r"><label>clouds</label><input type="range" id="cc" min="0" max="1" step="0.01" value="0.35"><div class="v" id="vc">0.35</div></div>
+  <div class="r"><label>exposure</label><input type="range" id="ce" min="0.1" max="3" step="0.05" value="1.0"><div class="v" id="ve">1.00</div></div>
+</div>
+<script>
+"use strict";
+const C=document.getElementById("sky"),X=C.getContext("2d");
+const PI=Math.PI,TAU=PI*2,DG=PI/180,RD=180/PI;
+const clp=(x,a,b)=>x<a?a:x>b?b:x;
+const mix=(a,b,t)=>a+(b-a)*t;
+const sm=(a,b,x)=>{const t=clp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
+
+let W,H,DPR;
+function resize(){
+  DPR=Math.min(devicePixelRatio||1,2);
+  // render at reduced resolution for performance, canvas CSS scales up
+  const scale=Math.min(DPR,1.0);
+  W=C.width=innerWidth*scale|0;
+  H=C.height=innerHeight*scale|0;
+}
+addEventListener("resize",()=>{resize();needRender=true});
+resize();
+
+// --- noise ---
+const PM=new Uint8Array(512),GX=new Float32Array(256),GY=new Float32Array(256);
+(function(){const r=rng(42),p=new Uint8Array(256);
+for(let i=0;i<256;i++)p[i]=i;
+for(let i=255;i>0;i--){const j=(r()*(i+1))|0;const t=p[i];p[i]=p[j];p[j]=t}
+for(let i=0;i<512;i++)PM[i]=p[i&255];
+for(let i=0;i<256;i++){const a=r()*TAU;GX[i]=Math.cos(a);GY[i]=Math.sin(a)}
+})();
+
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+function noise2(x,y){
+  const xi=Math.floor(x)&255,yi=Math.floor(y)&255;
+  const xf=x-Math.floor(x),yf=y-Math.floor(y);
+  const u=xf*xf*(3-2*xf),v=yf*yf*(3-2*yf);
+  const aa=PM[xi+PM[yi]],ba=PM[xi+1+PM[yi]],ab=PM[xi+PM[yi+1]],bb=PM[xi+1+PM[yi+1]];
+  return mix(mix(GX[aa]*xf+GY[aa]*yf,GX[ba]*(xf-1)+GY[ba]*yf,u),
+             mix(GX[ab]*xf+GY[ab]*(yf-1),GX[bb]*(xf-1)+GY[bb]*(yf-1),u),v);
+}
+
+function fbm(x,y,oct,lac,gain){let v=0,a=.5,f=1;for(let i=0;i<oct;i++){v+=a*noise2(x*f,y*f);f*=lac;a*=gain}return v}
+
+// --- stars (pre-sorted into angular bins for fast lookup) ---
+const NSTARS=1400;
+const starAzBins=360; // 1 degree bins
+const starBins=new Array(starAzBins);
+for(let i=0;i<starAzBins;i++)starBins[i]=[];
+(function(){
+  const r=rng(7);
+  for(let i=0;i<NSTARS;i++){
+    const theta=r()*TAU,phi=Math.acos(r());
+    const br=Math.pow(r(),2.2)*.85+.15;
+    const t=r();
+    let cr,cg,cb;
+    if(t<.15){cr=.6;cg=.72;cb=1}
+    else if(t<.4){cr=.88;cg=.9;cb=1}
+    else if(t<.7){cr=1;cg=1;cb=.88}
+    else if(t<.88){cr=1;cg=.85;cb=.65}
+    else{cr=1;cg=.6;cb=.4}
+    const azDeg=((theta*RD)%360+360)%360|0;
+    const bin=azDeg%starAzBins;
+    starBins[bin].push({theta,phi,br,cr,cg,cb,tp:r()*TAU,tr:.2+r()*3,sz:r()<.025?2:r()<.1?1.3:.8});
+  }
+})();
+
+// --- params ---
+const P={time:12,lat:21,turb:3,cloud:.35,exp:1};
+let playing=false,frame=0,needRender=true;
+
+// --- sun ---
+function sunPos(h,lat){
+  const ha=(h-12)*15*DG,la=lat*DG,dec=8*DG;
+  const sa=Math.sin(la)*Math.sin(dec)+Math.cos(la)*Math.cos(dec)*Math.cos(ha);
+  const alt=Math.asin(clp(sa,-1,1));
+  const ca=(Math.sin(dec)-Math.sin(la)*Math.sin(alt))/(Math.cos(la)*Math.cos(alt)+1e-10);
+  const az=Math.acos(clp(ca,-1,1));
+  const faz=ha>0?TAU-az:az;
+  return{alt,az:faz,dir:[Math.cos(alt)*Math.sin(faz),Math.sin(alt),Math.cos(alt)*Math.cos(faz)]};
+}
+
+// --- ACES tonemap ---
+function aces(x){const a=2.51,b=.03,c=2.43,d=.59,e=.14;return clp((x*(a*x+b))/(x*(c*x+d)+e),0,1)}
+
+// --- sky color (analytic rayleigh + mie, fast) ---
+function skyAt(vz,va,sa,saz,turb){
+  // vz=view zenith (0=horiz,PI/2=zenith), va=view az, sa=sun zenith angle, saz=sun az
+  const cosG=Math.sin(vz)*Math.sin(sa)*Math.cos(va-saz)+Math.cos(vz)*Math.cos(sa);
+  const gamma=Math.acos(clp(cosG,-1,1));
+  const cosV=Math.cos(vz),cosS=Math.cos(sa),mu=cosG;
+
+  // rayleigh
+  const beta=[5.8e-6,13.5e-6,33.1e-6];
+  const opDepth=8500/(cosV+.08)+8500/(cosS+.08);
+  const T0=Math.exp(-beta[0]*opDepth),T1=Math.exp(-beta[1]*opDepth),T2=Math.exp(-beta[2]*opDepth);
+  const phR=3/(16*PI)*(1+mu*mu);
+  const sunI=Math.max(cosS,0);
+  const hzBright=1+.6*Math.exp(-vz*4.5);
+
+  let r=beta[0]*phR*sunI*T0*hzBright*11000;
+  let g=beta[1]*phR*sunI*T1*hzBright*11000;
+  let b=beta[2]*phR*sunI*T2*hzBright*11000;
+
+  // mie
+  const gm=.76,g2=gm*gm;
+  const phM=3/(8*PI)*(1-g2)*(1+mu*mu)/((2+g2)*Math.pow(1+g2-2*gm*mu,1.5));
+  const mAmt=(turb-1)/9;
+  const mie=phM*sunI*mAmt*7500;
+  r+=mie;g+=mie;b+=mie*.8;
+
+  // zenith darkening correction (sky is brighter near horizon)
+  const zenithDark=1-sm(.3,0,vz)*.15;
+  r*=zenithDark;g*=zenithDark;b*=zenithDark;
+
+  return[r,g,b];
+}
+
+// --- render ---
+function render(){
+  const img=X.createImageData(W,H);
+  const d=img.data;
+  const sun=sunPos(P.time,P.lat);
+  const sa=Math.max(.01,PI/2-sun.alt); // sun zenith angle
+  const saz=sun.az;
+  const sunAlt=sun.alt;
+  const turb=P.turb;
+  const exp=P.exp;
+  const cc=P.cloud;
+  const nightF=sm(.06,-.18,sunAlt);
+  const dayF=sm(-.12,.22,sunAlt);
+  const sunsetF=sm(-.06,.08,sunAlt)*(1-sm(.14,.38,sunAlt));
+  const time=frame;
+
+  const horizY=H*.72|0; // horizon line
+
+  for(let y=0;y<H;y++){
+    const vz=(1-y/horizY)*PI/2;
+    const isGround=y>horizY;
+    const cosV=Math.cos(vz);
+
+    for(let x=0;x<W;x++){
+      const i=(y*W+x)<<2;
+
+      if(isGround){
+        const gf=(y-horizY)/(H-horizY);
+        const gb=(.03+dayF*.05)*(1-gf*.6);
+        d[i]=gb*70|0;d[i+1]=gb*80|0;d[i+2]=gb*55|0;d[i+3]=255;
+        continue;
+      }
+
+      const va=saz+(x/W-.5)*PI*.85;
+      const cosG=Math.sin(vz)*Math.sin(sa)*Math.cos(va-saz)+cosV*Math.cos(sa);
+      const gamma=Math.acos(clp(cosG,-1,1));
+
+      let[r,g,b]=skyAt(vz,va,sa,saz,turb);
+
+      // horizon glow at sunset
+      if(sunsetF>0){
+        const hzP=sm(.28,0,vz);
+        const ns=sm(.45,0,gamma);
+        const glI=sunsetF*hzP*(.35+ns*.65)*(turb/5);
+        r+=glI*2.8;g+=glI*.9;b+=glI*.15;
+        // belt
+        const opp=sm(PI*.55,PI*.3,gamma);
+        if(opp>.1&&hzP>.4){const bl=sunsetF*hzP*opp*.35*(turb/5);r+=bl*1.6;g+=bl*.35}
+      }
+
+      // sun disk
+      if(sunAlt>-.12){
+        const sR=.00465*RD;
+        const gl=Math.exp(-gamma*gamma/(.013*.013))*.25;
+        const dk=sm(sR*2.5,sR*1,gamma);
+        const sG=sm(-.1,.18,sunAlt),sB=sm(.02,.32,sunAlt);
+        const si=dk*38+gl*14;
+        r+=si;g+=sG*si;b+=sB*si;
+      }
+
+      // night transition
+      if(nightF>.0){
+        const nz=.003+.006*(1-vz/(PI/2));
+        r=mix(r,nz*.35,nightF);g=mix(g,nz*.45,nightF);b=mix(b,nz*1.1,nightF);
+      }
+
+      // stars
+      if(nightF>.005){
+        // find relevant star bins
+        const vaDeg=((va*RD)%360+360)%360|0;
+        for(let bi=-2;bi<=2;bi++){
+          const bin=(vaDeg+bi+starAzBins)%starAzBins;
+          const stars=starBins[bin];
+          for(let si=0;si<stars.length;si++){
+            const s=stars[si];
+            const dAz=Math.abs(va-s.theta);
+            if(dAz>PI)dAz=TAU-dAz;
+            if(dAz>.05)continue; // skip if azimuth too far
+            const sd=[Math.sin(s.phi)*Math.cos(s.theta),Math.cos(s.phi),Math.sin(s.phi)*Math.sin(s.theta)];
+            const sg=Math.acos(clp(
+              Math.sin(vz)*sd[0]*Math.cos(va-s.theta)+cosV*sd[1],-1,1));
+            const sR2=s.sz*1.6/W;
+            if(sg<sR2*5){
+              const ff=Math.exp(-sg*sg/(2*sR2*sR2));
+              const tw=.55+.45*Math.sin(time*.014*s.tr+s.tp);
+              const sb=s.br*nightF*ff*tw;
+              r+=s.cr*sb;g+=s.cg*sb;b+=s.cb*sb;
+            }
+          }
+        }
+
+        // milky way
+        const mwN=[.22,.62,-.42];const mwL=Math.sqrt(mwN[0]*mwN[0]+mwN[1]*mwN[1]+mwN[2]*mwN[2]);
+        const vd=[Math.sin(vz)*Math.cos(va),cosV,Math.sin(vz)*Math.sin(va)];
+        const md=1-Math.abs(vd[0]*mwN[0]/mwL+vd[1]*mwN[1]/mwL+vd[2]*mwN[2]/mwL);
+        const mwb=Math.exp(-md*md/.007)*nightF*.055;
+        const mwn=(fbm(vd[0]*14,vd[2]*14,3,2,.5)*.5+.5)*mwb;
+        r+=mwn*.35;g+=mwn*.5;b+=mwn*.95;
+
+        // airglow
+        const ag=sm(.22,.04,vz)*nightF*.012;
+        r+=ag*.25;g+=ag*.7;b+=ag*.45;
+      }
+
+      // clouds
+      if(cc>.005){
+        const cu=va/TAU*4.5+time*.00035;
+        const cv=vz/(PI/2)*5.5;
+        const n1=fbm(cu+.5,cv+.3,5,2.1,.47);
+        const n2=fbm(cu*2.2-.4,cv*1.6,4,2.2,.44);
+        let dn=(n1*.6+n2*.4)*.5+.5;
+        const thr=1-cc;
+        if(dn>thr){
+          dn=sm(thr,thr+.3,dn);
+          const cD=sm(-.06,.16,sunAlt);
+          const cS=sm(-.06,.07,sunAlt)*(1-sm(.12,.32,sunAlt));
+          const sil=sm(PI/3,PI/8,gamma)*sm(-.02,.1,sunAlt)*.35;
+          let cr2,cg2,cb2;
+          if(nightF>.6){cr2=.018+sil*.12;cg2=.022+sil*.1;cb2=.035+sil*.16}
+          else{cr2=.82*cD+.55*cS+sil;cg2=.84*cD+.22*cS+sil*.85;cb2=.9*cD+.06*cS+sil*.65}
+          const sh=1-dn*.22;cr2*=sh;cg2*=sh;cb2*=sh;
+          const bd=sm(.16,0,vz)*.25;cr2*=(1-bd);cg2*=(1-bd*.75);cb2*=(1-bd*.4);
+          const al=dn*(.45+cD*.4);
+          r=mix(r,cr2,al);g=mix(g,cg2,al);b=mix(b,cb2,al);
+        }
+      }
+
+      // tonemap
+      const tr=aces(r*exp),tg=aces(g*exp),tb=aces(b*exp);
+      d[i]=Math.pow(tr,1/2.2)*255|0;
+      d[i+1]=Math.pow(tg,1/2.2)*255|0;
+      d[i+2]=Math.pow(tb,1/2.2)*255|0;
+      d[i+3]=255;
+    }
+  }
+  X.putImageData(img,0,0);
+}
+
+// --- UI ---
+const $=id=>document.getElementById(id);
+function fmt(h){const hh=Math.floor(h)%24,mm=Math.floor((h%1)*60);return String(hh).padStart(2,"0")+":"+String(mm).padStart(2,"0")}
+function sync(){
+  const ts=fmt(P.time);
+  $("vt").textContent=ts;$("vl").textContent=P.lat.toFixed(1);
+  $("vb").textContent=P.turb.toFixed(1);$("vc").textContent=P.cloud.toFixed(2);
+  $("ve").textContent=P.exp.toFixed(2);
+  $("ct").value=P.time;$("cl").value=P.lat;$("cb").value=P.turb;
+  $("cc").value=P.cloud;$("ce").value=P.exp;
+  const s=sunPos(P.time,P.lat);
+  $("he").textContent=(s.alt*RD).toFixed(0);
+  $("ht").textContent=ts;$("hl").textContent=P.lat.toFixed(1);
+}
+$("ct").oninput=()=>{P.time=+$("ct").value;sync();needRender=true};
+$("cl").oninput=()=>{P.lat=+$("cl").value;sync();needRender=true};
+$("cb").oninput=()=>{P.turb=+$("cb").value;sync();needRender=true};
+$("cc").oninput=()=>{P.cloud=+$("cc").value;sync();needRender=true};
+$("ce").oninput=()=>{P.exp=+$("ce").value;sync();needRender=true};
+$("pb").onclick=()=>{playing=!playing;$("pb").textContent=playing?"pause":"play day cycle"};
+
+(function loop(){
+  if(playing){P.time+=.004;if(P.time>=24)P.time-=24;sync();needRender=true}
+  if(needRender||playing){render();needRender=false;frame++}
+  requestAnimationFrame(loop);
+})();
+sync();render();
+</script>
+</body>
+</html>
