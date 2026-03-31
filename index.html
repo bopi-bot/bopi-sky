@@ -104,16 +104,14 @@ const sm=(a,b,x)=>{const t=clp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
 
 function resize(){
   const w=CP.parentElement.clientWidth||innerWidth;
-  // equirectangular: 2:1 aspect
-  const pH=Math.round(w*.5);
-  PW=CP.width=Math.round(w*.5);
-  PH=CP.height=Math.round(pH*.5);
-  CP.style.height=pH+'px';
+  // equirectangular: 2:1 aspect, full res
+  PW=CP.width=w;
+  PH=CP.height=Math.round(w*.5);
+  CP.style.height=PH+'px';
   // hemisphere: square canvas, full width
-  const hW=Math.round(w*.5);
-  HW=CH.width=hW;
-  HH=CH.height=hW;
-  CH.style.height=hW+'px';
+  HW=CH.width=w;
+  HH=CH.height=w;
+  CH.style.height=w+'px';
   needRender=true;
 }
 addEventListener("resize",resize);
@@ -208,11 +206,11 @@ function pixel(vz,va,sz,saz,sunAlt,turb,exp,zenAbs,coeffs){
   let r=sc.r*scI,g=sc.g*scI,b=sc.b*scI;
   if(sunAlt>-.2){
     const sR=.00465*RD;
-    const gl=Math.exp(-gamma*gamma/(.005*.005))*.15;
+    const gl=Math.exp(-gamma*gamma/(.003*.003))*.08;
     const dk=sm(sR*2.5,sR*1,gamma);
     const sG=sm(-.1,.18,sunAlt),sB=sm(.02,.32,sunAlt);
     const fade=sm(-.2,.05,sunAlt);
-    const si=(dk*15+gl*8)*fade;
+    const si=(dk*20+gl*5)*fade;
     r+=si;g+=sG*si;b+=sB*si;
   }
   const tr=aces(r*exp),tg=aces(g*exp),tb=aces(b*exp);
