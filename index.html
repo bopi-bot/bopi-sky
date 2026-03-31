@@ -93,7 +93,6 @@ const clp=(x,a,b)=>x<a?a:x>b?b:x;
 const mix=(a,b,t)=>a+(b-a)*t;
 const sm=(a,b,x)=>{const t=clp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
 
-let W,H;
 function resize(){
   const w=C.parentElement.clientWidth||innerWidth;
   const h=Math.round(w*9/16);
@@ -149,7 +148,7 @@ for(let i=0;i<SABINS;i++)starBins[i]=[];
 
 // --- params ---
 const P={time:12,lat:21,lon:105.85,tz:7,turb:3,cloud:.35,exp:1,date:new Date(2026,5,21)};
-let playing=false,frame=0,needRender=true;
+let playing=false,frame=0,needRender=false,W=1,H=1;
 
 // --- solar position (full astronomical model) ---
 function dayOfYear(d){const s=new Date(d.getFullYear(),0,0);return Math.floor((d-s)/86400000)}
