@@ -21,7 +21,7 @@
   <style>
     body { -webkit-font-smoothing: antialiased; }
     ::selection { background: rgba(0,94,234,0.15); }
-    canvas#sky { display: block; width: 100%; border-radius: 0.25rem; image-rendering: auto; }
+    canvas { display: block; width: 100%; border-radius: 0.25rem; image-rendering: auto; }
     input[type=range] { -webkit-appearance: none; appearance: none; height: 2px; background: rgba(0,0,0,0.08); border-radius: 1px; outline: none; cursor: pointer; }
     input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #005EEA; cursor: pointer; }
     input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #005EEA; cursor: pointer; border: none; }
@@ -38,15 +38,29 @@
   </div>
 
   <main class="max-w-2xl mx-auto px-6 pb-6">
-    <!-- canvas -->
-    <div class="relative">
-      <canvas id="sky"></canvas>
-      <!-- hud overlay -->
-      <div class="absolute top-3 left-3 flex gap-3 items-center bg-black/20 backdrop-blur-md rounded px-3 py-1.5">
-        <span class="text-[0.6875rem] text-white/50 lowercase">sun <span class="text-white/80 font-medium" id="he">45</span> deg</span>
-        <span class="text-[0.6875rem] text-white/80 font-medium" id="ht">12:00</span>
+    <!-- canvases -->
+    <div class="grid grid-cols-2 gap-2">
+      <div class="relative">
+        <canvas id="cPan"></canvas>
+        <div class="absolute bottom-2 left-2 bg-black/20 backdrop-blur-md rounded px-2 py-1">
+          <span class="text-[0.625rem] text-white/50 lowercase">equirectangular</span>
+        </div>
       </div>
-      <button id="pb" class="absolute top-3 right-3 bg-black/20 backdrop-blur-md rounded px-3 py-1.5 text-[0.6875rem] text-white/50 lowercase cursor-pointer hover:text-white/70 transition-colors font-sans">play</button>
+      <div class="relative">
+        <canvas id="cHem"></canvas>
+        <div class="absolute bottom-2 left-2 bg-black/20 backdrop-blur-md rounded px-2 py-1">
+          <span class="text-[0.625rem] text-white/50 lowercase">hemisphere</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- hud -->
+    <div class="flex justify-between items-center mt-2">
+      <div class="flex gap-3 items-center">
+        <span class="text-[0.6875rem] text-black/40 lowercase">sun <span class="text-black/60 font-medium" id="he">45</span> deg</span>
+        <span class="text-[0.6875rem] text-black/60 font-medium" id="ht">12:00</span>
+      </div>
+      <button id="pb" class="bg-black/5 hover:bg-black/8 rounded px-3 py-1 text-[0.6875rem] text-black/40 lowercase cursor-pointer hover:text-black/60 transition-colors font-sans">play</button>
     </div>
 
     <!-- controls -->
@@ -75,7 +89,6 @@
         <input type="range" id="ce" min="0.1" max="3" step="0.05" value="1.0" class="flex-1">
         <span class="text-xs text-black/40 min-w-[3rem] text-right font-mono" id="ve">1.00</span>
       </div>
-
     </div>
 
     <p class="text-xs text-black/30 lowercase mt-4 leading-relaxed">based on the preetham 1999 analytic daylight model. scratchapixel tutorial for rayleigh/mie scattering fundamentals.</p>
@@ -83,24 +96,31 @@
 
 <script>
 "use strict";
-const C=document.getElementById("sky"),X=C.getContext("2d");
+const CP=document.getElementById("cPan"),CH=document.getElementById("cHem");
+const XP=CP.getContext("2d"),XH=CH.getContext("2d");
 const PI=Math.PI,TAU=PI*2,DG=PI/180,RD=180/PI;
 const clp=(x,a,b)=>x<a?a:x>b?b:x;
 const sm=(a,b,x)=>{const t=clp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
 
 function resize(){
-  const w=C.parentElement.clientWidth||innerWidth;
-  const h=Math.round(w*9/16);
-  W=C.width=Math.round(w*.5);
-  H=C.height=Math.round(h*.5);
-  C.style.height=h+'px';
+  const w=CP.parentElement.clientWidth||innerWidth;
+  // equirectangular: 2:1 aspect
+  const pH=Math.round(w*.5);
+  PW=CP.width=Math.round(w*.5);
+  PH=CP.height=Math.round(pH*.5);
+  CP.style.height=pH+'px';
+  // hemisphere: square canvas
+  const hW=Math.round(w*.5);
+  HW=CH.width=hW;
+  HH=CH.height=hW;
+  CH.style.height=hW+'px';
   needRender=true;
 }
 addEventListener("resize",resize);
 
 // --- params ---
 const P={time:12,lat:21,lon:105.85,tz:7,turb:3,exp:1,date:new Date(2026,5,21)};
-let playing=false,needRender=false,W=1,H=1;
+let playing=false,needRender=false,PW=1,PH=1,HW=1,HH=1;
 
 // --- solar position (full astronomical model) ---
 function dayOfYear(d){const s=new Date(d.getFullYear(),0,0);return Math.floor((d-s)/86400000)}
@@ -124,7 +144,6 @@ function solarPosition(hours,lat,lon,tz,date){
 
 // --- Preetham sky model (1999) ---
 function calcZenitalAbsolutes(turb,sz){
-  // clamp the tan argument, not the zenith -- keeps color shift natural
   const tanArg=clp((4/9-turb/120)*(PI-2*sz),-1.4,1.4);
   const Yz=(4.0453*turb-4.9710)*Math.tan(tanArg)-0.2155*turb+2.4192;
   const Y0=40;
@@ -165,78 +184,85 @@ function yxyToRgb(Y,x,y){
   };
 }
 
-function skyColorPreetham(vz,va,zenAbs,coeffs,sunZen,sunAz){
+function skyColor(vz,va,zenAbs,coeffs,sunZen,sunAz){
   const cosG=Math.sin(vz)*Math.sin(sunZen)*Math.cos(va-sunAz)+Math.cos(vz)*Math.cos(sunZen);
   const gamma=Math.acos(clp(cosG,-1,1));
-
   const pYzen=perez(0,sunZen,coeffs.Y);
   const pXzen=perez(0,sunZen,coeffs.x);
   const pYZen=perez(0,sunZen,coeffs.y);
-
   const Yp=pYzen>0?zenAbs.Yz*perez(vz,gamma,coeffs.Y)/pYzen:0;
   const xp=pXzen>0?zenAbs.xz*perez(vz,gamma,coeffs.x)/pXzen:0;
   const yp=pYZen>0?zenAbs.yz*perez(vz,gamma,coeffs.y)/pYZen:0;
-
   return yxyToRgb(clp(Yp,0,1e6),clp(xp,0,1),clp(yp,0,1));
 }
 
-// --- ACES tonemap ---
 function aces(x){const a=2.51,b=.03,c=2.43,d=.59,e=.14;return clp((x*(a*x+b))/(x*(c*x+d)+e),0,1)}
+
+// pixel shader shared by both projections
+function pixel(vz,va,sz,saz,sunAlt,turb,exp,zenAbs,coeffs){
+  const cosG=Math.sin(vz)*Math.sin(sz)*Math.cos(va-saz)+Math.cos(vz)*Math.cos(sz);
+  const gamma=Math.acos(clp(cosG,-1,1));
+  const sc=skyColor(vz,va,zenAbs,coeffs,sz,saz);
+  const sunI=Math.max(Math.cos(sz),0);
+  const scI=.25+sunI*.75;
+  let r=sc.r*scI,g=sc.g*scI,b=sc.b*scI;
+  if(sunAlt>-.2){
+    const sR=.00465*RD;
+    const gl=Math.exp(-gamma*gamma/(.013*.013))*.3;
+    const dk=sm(sR*2.5,sR*1,gamma);
+    const sG=sm(-.1,.18,sunAlt),sB=sm(.02,.32,sunAlt);
+    const fade=sm(-.2,.05,sunAlt);
+    const si=(dk*40+gl*18)*fade;
+    r+=si;g+=sG*si;b+=sB*si;
+  }
+  const tr=aces(r*exp),tg=aces(g*exp),tb=aces(b*exp);
+  return[Math.pow(tr,1/2.2)*255|0,Math.pow(tg,1/2.2)*255|0,Math.pow(tb,1/2.2)*255|0];
+}
 
 // --- render ---
 function render(){
-  const img=X.createImageData(W,H);
-  const d=img.data;
-
   const sun=solarPosition(P.time,P.lat,P.lon,P.tz,P.date);
-  const sz=sun.zenith, saz=sun.azimuth, sunAlt=sun.alt;
-  const turb=P.turb, exp=P.exp;
-
+  const sz=sun.zenith,saz=sun.azimuth,sunAlt=sun.alt;
+  const turb=P.turb,exp=P.exp;
   const zenAbs=calcZenitalAbsolutes(turb,sz);
   const coeffs=calcCoeffs(turb);
 
-  const horizY=H; // full sky, no ground
-
-  for(let y=0;y<H;y++){
-    const vz=(y/horizY)*PI/2; // y=0=zenith (top), y=H=horizon (bottom)
-    const cosV=Math.cos(vz);
-
-    for(let x=0;x<W;x++){
-      const i=(y*W+x)<<2;
-
-      // full 360 equirectangular, centered on north so sun arc doesn't wrap
-      const va=(x/W-.5)*TAU;
-
-      // compute angular distance to sun (reused in multiple places)
-      const cosG=Math.sin(vz)*Math.sin(sz)*Math.cos(va-saz)+cosV*Math.cos(sz);
-      const gamma=Math.acos(clp(cosG,-1,1));
-
-      // preetham sky color
-      const sc=skyColorPreetham(vz,va,zenAbs,coeffs,sz,saz);
-      const sunI=Math.max(Math.cos(sz),0);
-      const scI=.25+sunI*.75;
-      let r=sc.r*scI, g=sc.g*scI, b=sc.b*scI;
-
-      // sun disk -- fades naturally with sky brightness
-      if(sunAlt>-.2){
-        const sR=.00465*RD;
-        const gl=Math.exp(-gamma*gamma/(.013*.013))*.3;
-        const dk=sm(sR*2.5,sR*1,gamma);
-        const sG=sm(-.1,.18,sunAlt),sB=sm(.02,.32,sunAlt);
-        const fade=sm(-.2,.05,sunAlt);
-        const si=(dk*40+gl*18)*fade;
-        r+=si;g+=sG*si;b+=sB*si;
-      }
-
-      // tonemap + gamma
-      const tr=aces(r*exp),tg=aces(g*exp),tb=aces(b*exp);
-      d[i]=Math.pow(tr,1/2.2)*255|0;
-      d[i+1]=Math.pow(tg,1/2.2)*255|0;
-      d[i+2]=Math.pow(tb,1/2.2)*255|0;
-      d[i+3]=255;
+  // --- equirectangular ---
+  const imgP=XP.createImageData(PW,PH);
+  const dP=imgP.data;
+  for(let y=0;y<PH;y++){
+    const vz=(y/PH)*PI/2;
+    for(let x=0;x<PW;x++){
+      const i=(y*PW+x)<<2;
+      const va=(x/PW-.5)*TAU;
+      const c=pixel(vz,va,sz,saz,sunAlt,turb,exp,zenAbs,coeffs);
+      dP[i]=c[0];dP[i+1]=c[1];dP[i+2]=c[2];dP[i+3]=255;
     }
   }
-  X.putImageData(img,0,0);
+  XP.putImageData(imgP,0,0);
+
+  // --- hemisphere ---
+  const imgH=XH.createImageData(HW,HH);
+  const dH=imgH.data;
+  const cx=HW/2,cy=HH/2,rad=cx*.95;
+  for(let y=0;y<HH;y++){
+    for(let x=0;x<HW;x++){
+      const i=(y*HW+x)<<2;
+      const dx=(x-cx)/rad,dy=(y-cy)/rad;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist>1){
+        // outside circle -- cream background
+        dH[i]=255;dH[i+1]=251;dH[i+2]=240;dH[i+3]=255;
+        continue;
+      }
+      // equidistant: r = dist * PI/2, so dist=0 is zenith, dist=1 is horizon
+      const vz=dist*PI/2;
+      const va=Math.atan2(dx,-dy); // north = top, east = right
+      const c=pixel(vz,va,sz,saz,sunAlt,turb,exp,zenAbs,coeffs);
+      dH[i]=c[0];dH[i+1]=c[1];dH[i+2]=c[2];dH[i+3]=255;
+    }
+  }
+  XH.putImageData(imgH,0,0);
 }
 
 // --- UI ---
