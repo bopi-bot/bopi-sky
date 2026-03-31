@@ -175,10 +175,11 @@ function solarPosition(hours,lat,lon,tz,date){
 
 // --- Preetham sky model (1999) ---
 function calcZenitalAbsolutes(turb,sz){
-  const szC=clp(sz,0,1.4835); // clamp to 85 deg for model stability
-  const Yz=(4.0453*turb-4.9710)*Math.tan((4/9-turb/120)*(PI-2*szC))-0.2155*turb+2.4192;
+  // clamp the tan argument, not the zenith -- keeps color shift natural
+  const tanArg=clp((4/9-turb/120)*(PI-2*sz),-1.4,1.4);
+  const Yz=(4.0453*turb-4.9710)*Math.tan(tanArg)-0.2155*turb+2.4192;
   const Y0=40;
-  const z3=szC*szC*szC,z2=szC*szC,z=szC;
+  const z3=sz*sz*sz,z2=sz*sz,z=sz;
   const T2=turb*turb;
   const xz=T2*(0.00166*z3-0.00375*z2+0.00209*z)
         +turb*(-0.02903*z3+0.06377*z2-0.03202*z+0.00394)
@@ -218,16 +219,14 @@ function yxyToRgb(Y,x,y){
 function skyColorPreetham(vz,va,zenAbs,coeffs,sunZen,sunAz){
   const cosG=Math.sin(vz)*Math.sin(sunZen)*Math.cos(va-sunAz)+Math.cos(vz)*Math.cos(sunZen);
   const gamma=Math.acos(clp(cosG,-1,1));
-  const vzC=clp(vz,0,PI*.499);
-  const szC=clp(sunZen,0,1.4835);
 
-  const pYzen=perez(0,szC,coeffs.Y);
-  const pXzen=perez(0,szC,coeffs.x);
-  const pYZen=perez(0,szC,coeffs.y);
+  const pYzen=perez(0,sunZen,coeffs.Y);
+  const pXzen=perez(0,sunZen,coeffs.x);
+  const pYZen=perez(0,sunZen,coeffs.y);
 
-  const Yp=pYzen>0?zenAbs.Yz*perez(vzC,gamma,coeffs.Y)/pYzen:0;
-  const xp=pXzen>0?zenAbs.xz*perez(vzC,gamma,coeffs.x)/pXzen:0;
-  const yp=pYZen>0?zenAbs.yz*perez(vzC,gamma,coeffs.y)/pYZen:0;
+  const Yp=pYzen>0?zenAbs.Yz*perez(vz,gamma,coeffs.Y)/pYzen:0;
+  const xp=pXzen>0?zenAbs.xz*perez(vz,gamma,coeffs.x)/pXzen:0;
+  const yp=pYZen>0?zenAbs.yz*perez(vz,gamma,coeffs.y)/pYZen:0;
 
   return yxyToRgb(clp(Yp,0,1e6),clp(xp,0,1),clp(yp,0,1));
 }
