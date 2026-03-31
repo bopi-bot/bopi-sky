@@ -236,30 +236,24 @@ function render(){
       let r=sc.r*horizBright,g=sc.g*horizBright,b=sc.b*horizBright;
 
       // aerial perspective / atmospheric haze near horizon
-      if(vz>PI/4){
-        const hazeF=sm(PI/4,PI/2,vz);
-        // haze color from preetham at horizon opposite to sun (neutral)
+      if(vz>PI/3){
+        const hazeF=sm(PI/3,PI/2,vz);
         const hzR=.65,hzG=.72,hzB=.82;
-        r=mix(r,hzR,hazeF*.35);
-        g=mix(g,hzG,hazeF*.35);
-        b=mix(b,hzB,hazeF*.35);
+        r=mix(r,hzR,hazeF*.15);
+        g=mix(g,hzG,hazeF*.15);
+        b=mix(b,hzB,hazeF*.15);
       }
 
       // sun disk + realistic atmospheric glow
       if(sunAlt>-.2){
         const sR=.00465*RD;
-        // tight disk
         const dk=sm(sR*2.5,sR*1,gamma);
-        // forward mie scattering glow (asymmetric -- elongated toward viewer)
-        const mieG=Math.exp(-gamma/.12)*.02;
-        // rayleigh aureole (small tight glow)
-        const rayG=Math.exp(-gamma*gamma/(.003*.003))*.06;
-        // circumsolar glow (broad, from aerosols)
-        const circG=Math.exp(-gamma/.04)*.04;
-        // sunset color shift
+        const rayG=Math.exp(-gamma*gamma/(.002*.002))*.03;
+        const mieG=Math.exp(-gamma/.15)*.008;
+        const circG=Math.exp(-gamma/.05)*.01;
         const sG=sm(-.1,.18,sunAlt),sB=sm(.02,.32,sunAlt);
         const fade=sm(-.2,.05,sunAlt);
-        const si=(dk*20+rayG*10+mieG*12+circG*8)*fade;
+        const si=(dk*18+rayG*8+mieG*6+circG*4)*fade;
         r+=si;g+=sG*si;b+=sB*si;
       }
 
