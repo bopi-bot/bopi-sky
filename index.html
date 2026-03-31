@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { -webkit-font-smoothing: antialiased; font-family: 'Inter', system-ui, sans-serif; background: #000; overflow: hidden; height: 100vh; width: 100vw; }
+    body { -webkit-font-smoothing: antialiased; font-family: 'Inter', system-ui, sans-serif; background: #FFFBF0; overflow: hidden; height: 100vh; width: 100vw; }
     canvas#sky { display: block; width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; image-rendering: auto; }
     .overlay { position: fixed; z-index: 10; pointer-events: none; }
     .overlay > * { pointer-events: auto; }
@@ -67,7 +67,7 @@ let W,H,DPR;
 function resize(){
   DPR=Math.min(devicePixelRatio||1,2);
   // render at reduced resolution for performance, canvas CSS scales up
-  const scale=Math.min(DPR,1.0);
+  const scale=Math.min(DPR,0.35);
   W=C.width=innerWidth*scale|0;
   H=C.height=innerHeight*scale|0;
 }
@@ -115,7 +115,7 @@ for(let i=0;i<starAzBins;i++)starBins[i]=[];
     else{cr=1;cg=.6;cb=.4}
     const azDeg=((theta*RD)%360+360)%360|0;
     const bin=azDeg%starAzBins;
-    starBins[bin].push({theta,phi,br,cr,cg,cb,tp:r()*TAU,tr:.2+r()*3,sz:r()<.025?2:r()<.1?1.3:.8});
+    starBins[bin].push({theta,phi,sinPhi:Math.sin(phi),cosPhi:Math.cos(phi),br,cr,cg,cb,tp:r()*TAU,tr:.2+r()*3,sz:r()<.025?2:r()<.1?1.3:.8});
   }
 })();
 
@@ -139,7 +139,7 @@ function aces(x){const a=2.51,b=.03,c=2.43,d=.59,e=.14;return clp((x*(a*x+b))/(x
 
 // --- sky color (analytic rayleigh + mie, fast) ---
 function skyAt(vz,va,sa,saz,turb){
-  // vz=view zenith (0=horiz,PI/2=zenith), va=view az, sa=sun zenith angle, saz=sun az
+  // vz=view elevation (0=zenith,PI/2=horizon), va=view az, sa=sun zenith angle, saz=sun az
   const cosG=Math.sin(vz)*Math.sin(sa)*Math.cos(va-saz)+Math.cos(vz)*Math.cos(sa);
   const gamma=Math.acos(clp(cosG,-1,1));
   const cosV=Math.cos(vz),cosS=Math.cos(sa),mu=cosG;
@@ -150,11 +150,12 @@ function skyAt(vz,va,sa,saz,turb){
   const T0=Math.exp(-beta[0]*opDepth),T1=Math.exp(-beta[1]*opDepth),T2=Math.exp(-beta[2]*opDepth);
   const phR=3/(16*PI)*(1+mu*mu);
   const sunI=Math.max(cosS,0);
-  const hzBright=1+.6*Math.exp(-vz*4.5);
+  // vz: 0=zenith (top of canvas), PI/2=horizon (bottom of sky)
+  const hzBright=1+.6*Math.exp(-(PI/2-vz)*4.5);
 
-  let r=beta[0]*phR*sunI*T0*hzBright*11000;
-  let g=beta[1]*phR*sunI*T1*hzBright*11000;
-  let b=beta[2]*phR*sunI*T2*hzBright*11000;
+  let r=beta[0]*phR*sunI*T0*hzBright*150000;
+  let g=beta[1]*phR*sunI*T1*hzBright*150000;
+  let b=beta[2]*phR*sunI*T2*hzBright*150000;
 
   // mie
   const gm=.76,g2=gm*gm;
@@ -163,8 +164,8 @@ function skyAt(vz,va,sa,saz,turb){
   const mie=phM*sunI*mAmt*7500;
   r+=mie;g+=mie;b+=mie*.8;
 
-  // zenith darkening correction (sky is brighter near horizon)
-  const zenithDark=1-sm(.3,0,vz)*.15;
+  // mild darkening at very high elevation to prevent over-bright zenith
+  const zenithDark=1-sm(.15,0,vz)*.08;
   r*=zenithDark;g*=zenithDark;b*=zenithDark;
 
   return[r,g,b];
@@ -189,7 +190,7 @@ function render(){
   const horizY=H*.72|0; // horizon line
 
   for(let y=0;y<H;y++){
-    const vz=(1-y/horizY)*PI/2;
+    const vz=(y/horizY)*PI/2;
     const isGround=y>horizY;
     const cosV=Math.cos(vz);
 
@@ -211,7 +212,7 @@ function render(){
 
       // horizon glow at sunset
       if(sunsetF>0){
-        const hzP=sm(.28,0,vz);
+        const hzP=sm(0,.28,vz);
         const ns=sm(.45,0,gamma);
         const glI=sunsetF*hzP*(.35+ns*.65)*(turb/5);
         r+=glI*2.8;g+=glI*.9;b+=glI*.15;
@@ -248,9 +249,8 @@ function render(){
             const dAz=Math.abs(va-s.theta);
             if(dAz>PI)dAz=TAU-dAz;
             if(dAz>.05)continue; // skip if azimuth too far
-            const sd=[Math.sin(s.phi)*Math.cos(s.theta),Math.cos(s.phi),Math.sin(s.phi)*Math.sin(s.theta)];
             const sg=Math.acos(clp(
-              Math.sin(vz)*sd[0]*Math.cos(va-s.theta)+cosV*sd[1],-1,1));
+              Math.sin(vz)*s.sinPhi*Math.cos(va-s.theta)+cosV*s.cosPhi,-1,1));
             const sR2=s.sz*1.6/W;
             if(sg<sR2*5){
               const ff=Math.exp(-sg*sg/(2*sR2*sR2));
@@ -291,7 +291,7 @@ function render(){
           if(nightF>.6){cr2=.018+sil*.12;cg2=.022+sil*.1;cb2=.035+sil*.16}
           else{cr2=.82*cD+.55*cS+sil;cg2=.84*cD+.22*cS+sil*.85;cb2=.9*cD+.06*cS+sil*.65}
           const sh=1-dn*.22;cr2*=sh;cg2*=sh;cb2*=sh;
-          const bd=sm(.16,0,vz)*.25;cr2*=(1-bd);cg2*=(1-bd*.75);cb2*=(1-bd*.4);
+          const bd=sm(0,.16,vz)*.25;cr2*=(1-bd);cg2*=(1-bd*.75);cb2*=(1-bd*.4);
           const al=dn*(.45+cD*.4);
           r=mix(r,cr2,al);g=mix(g,cg2,al);b=mix(b,cb2,al);
         }
