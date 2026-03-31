@@ -39,7 +39,7 @@
 
   <main class="max-w-2xl mx-auto px-6 pb-6">
     <!-- canvases -->
-    <div class="grid grid-cols-2 gap-2">
+    <div class="flex flex-col gap-2">
       <div class="relative">
         <canvas id="cPan"></canvas>
         <div class="absolute bottom-2 left-2 bg-black/20 backdrop-blur-md rounded px-2 py-1">
@@ -109,7 +109,7 @@ function resize(){
   PW=CP.width=Math.round(w*.5);
   PH=CP.height=Math.round(pH*.5);
   CP.style.height=pH+'px';
-  // hemisphere: square canvas
+  // hemisphere: square canvas, full width
   const hW=Math.round(w*.5);
   HW=CH.width=hW;
   HH=CH.height=hW;
