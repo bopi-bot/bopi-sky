@@ -100,7 +100,7 @@ addEventListener("resize",resize);
 
 // --- params ---
 const P={time:12,lat:21,lon:105.85,tz:7,turb:3,exp:1,date:new Date(2026,5,21)};
-let playing=false,frame=0,needRender=false,W=1,H=1;
+let playing=false,needRender=false,W=1,H=1;
 
 // --- solar position (full astronomical model) ---
 function dayOfYear(d){const s=new Date(d.getFullYear(),0,0);return Math.floor((d-s)/86400000)}
@@ -195,19 +195,17 @@ function render(){
   const zenAbs=calcZenitalAbsolutes(turb,sz);
   const coeffs=calcCoeffs(turb);
 
-  const sunsetF=sm(-.1,.12,sunAlt)*(1-sm(.15,.45,sunAlt));
-
   const horizY=H; // full sky, no ground
 
   for(let y=0;y<H;y++){
-    const vz=(1-y/horizY)*PI/2;
+    const vz=(y/horizY)*PI/2; // y=0=zenith (top), y=H=horizon (bottom)
     const cosV=Math.cos(vz);
 
     for(let x=0;x<W;x++){
       const i=(y*W+x)<<2;
 
-      // full 360 equirectangular sky dome
-      const va=(x/W)*TAU;
+      // full 360 equirectangular, centered on north so sun arc doesn't wrap
+      const va=(x/W-.5)*TAU;
 
       // compute angular distance to sun (reused in multiple places)
       const cosG=Math.sin(vz)*Math.sin(sz)*Math.cos(va-saz)+cosV*Math.cos(sz);
@@ -218,16 +216,6 @@ function render(){
       const sunI=Math.max(Math.cos(sz),0);
       const scI=.25+sunI*.75;
       let r=sc.r*scI, g=sc.g*scI, b=sc.b*scI;
-
-      // sunset glow (supplementary to preetham which is subtle at low sun)
-      if(sunsetF>0){
-        const hzP=sm(.28,0,vz);
-        const ns=sm(.45,0,gamma);
-        const glI=sunsetF*hzP*(.35+ns*.65)*(turb/5);
-        r+=glI*1.4;g+=glI*.45;b+=glI*.08;
-        const opp=sm(PI*.55,PI*.3,gamma);
-        if(opp>.1&&hzP>.4){const bl=sunsetF*hzP*opp*.2*(turb/5);r+=bl*.8;g+=bl*.18}
-      }
 
       // sun disk -- fades naturally with sky brightness
       if(sunAlt>-.2){
@@ -274,7 +262,7 @@ $("pb").onclick=()=>{playing=!playing;$("pb").textContent=playing?"pause":"play"
 
 (function loop(){
   if(playing){P.time+=.004;if(P.time>=24)P.time-=24;sync();needRender=true}
-  if(needRender||playing){render();needRender=false;frame++}
+  if(needRender||playing){render();needRender=false}
   requestAnimationFrame(loop);
 })();
 
