@@ -250,22 +250,14 @@ function render(){
   const preethamF=sm(-.05,.1,sunAlt);  // fade out preetham below -5 deg
   const time=frame;
 
-  const horizY=H*.72|0;
+  const horizY=H; // full sky, no ground
 
   for(let y=0;y<H;y++){
     const vz=(1-y/horizY)*PI/2;
-    const isGround=y>horizY;
     const cosV=Math.cos(vz);
 
     for(let x=0;x<W;x++){
       const i=(y*W+x)<<2;
-
-      if(isGround){
-        const gf=(y-horizY)/(H-horizY);
-        const gb=(.03+dayF*.05)*(1-gf*.6);
-        d[i]=gb*70|0;d[i+1]=gb*80|0;d[i+2]=gb*55|0;d[i+3]=255;
-        continue;
-      }
 
       const va=saz+(x/W-.5)*PI*.85;
 
@@ -319,7 +311,7 @@ function render(){
           const stars=starBins[bin];
           for(let si=0;si<stars.length;si++){
             const s=stars[si];
-            const dAz=Math.abs(va-s.theta);
+            let dAz=Math.abs(va-s.theta);
             if(dAz>PI)dAz=TAU-dAz;
             if(dAz>.05)continue;
             const sd=[Math.sin(s.phi)*Math.cos(s.theta),Math.cos(s.phi),Math.sin(s.phi)*Math.sin(s.theta)];
