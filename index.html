@@ -91,6 +91,7 @@
 const C=document.getElementById("sky"),X=C.getContext("2d");
 const PI=Math.PI,TAU=PI*2,DG=PI/180,RD=180/PI;
 const clp=(x,a,b)=>x<a?a:x>b?b:x;
+const mix=(a,b,t)=>a+(b-a)*t;
 const sm=(a,b,x)=>{const t=clp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
 
 function resize(){
