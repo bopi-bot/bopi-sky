@@ -9,10 +9,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { -webkit-font-smoothing: antialiased; font-family: 'Inter', system-ui, sans-serif; background: #FFFBF0; overflow: hidden; height: 100vh; width: 100vw; }
+    body { -webkit-font-smoothing: antialiased; font-family: 'Inter', system-ui, sans-serif; background: #000; overflow: hidden; height: 100vh; width: 100vw; }
     canvas#sky { display: block; width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; image-rendering: auto; }
-    .overlay { position: fixed; z-index: 10; pointer-events: none; }
-    .overlay > * { pointer-events: auto; }
     .hud {
       position: fixed; top: 1.25rem; left: 50%; transform: translateX(-50%);
       background: rgba(10,10,15,0.55); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
@@ -40,6 +38,13 @@
     .r label { font-size: 0.625rem; color: rgba(255,255,255,0.42); text-transform: lowercase; min-width: 4rem; user-select: none; }
     .r input[type=range] { flex: 1; -webkit-appearance: none; appearance: none; height: 2px; background: rgba(255,255,255,0.1); border-radius: 1px; outline: none; cursor: pointer; }
     .r input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,0.85); cursor: pointer; }
+    .r input[type=date] {
+      flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 0.25rem; padding: 0.2rem 0.4rem; color: rgba(255,255,255,0.6);
+      font-family: 'Inter', system-ui, sans-serif; font-size: 0.5625rem; text-transform: lowercase;
+      outline: none; cursor: pointer;
+    }
+    .r input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.5); cursor: pointer; }
     .r .v { font-size: 0.5625rem; color: rgba(255,255,255,0.3); min-width: 3rem; text-align: right; font-variant-numeric: tabular-nums; user-select: none; }
     @media(max-width:480px) { .panel { min-width: 0; padding: 0.55rem 0.65rem; } .r label { min-width: 3.25rem; font-size: 0.5625rem; } }
   </style>
@@ -49,6 +54,7 @@
 <div class="hud"><span>sun <b id="he">45</b> deg</span><span><b id="ht">12:00</b></span><span><b id="hl">21.0</b> lat</span></div>
 <button class="btn" id="pb">play day cycle</button>
 <div class="panel">
+  <div class="r"><label>date</label><input type="date" id="cd" value="2026-06-21"><div class="v"></div></div>
   <div class="r"><label>time</label><input type="range" id="ct" min="0" max="24" step="0.02" value="12"><div class="v" id="vt">12:00</div></div>
   <div class="r"><label>latitude</label><input type="range" id="cl" min="-90" max="90" step="0.5" value="21"><div class="v" id="vl">21.0</div></div>
   <div class="r"><label>turbidity</label><input type="range" id="cb" min="1" max="10" step="0.1" value="3"><div class="v" id="vb">3.0</div></div>
@@ -63,13 +69,10 @@ const clp=(x,a,b)=>x<a?a:x>b?b:x;
 const mix=(a,b,t)=>a+(b-a)*t;
 const sm=(a,b,x)=>{const t=clp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
 
-let W,H,DPR;
+let W,H;
 function resize(){
-  DPR=Math.min(devicePixelRatio||1,2);
-  // render at reduced resolution for performance, canvas CSS scales up
-  const scale=Math.min(DPR,0.35);
-  W=C.width=innerWidth*scale|0;
-  H=C.height=innerHeight*scale|0;
+  W=C.width=Math.round(innerWidth*.55);
+  H=C.height=Math.round(innerHeight*.55);
 }
 addEventListener("resize",()=>{resize();needRender=true});
 resize();
@@ -96,11 +99,10 @@ function noise2(x,y){
 
 function fbm(x,y,oct,lac,gain){let v=0,a=.5,f=1;for(let i=0;i<oct;i++){v+=a*noise2(x*f,y*f);f*=lac;a*=gain}return v}
 
-// --- stars (pre-sorted into angular bins for fast lookup) ---
-const NSTARS=1400;
-const starAzBins=360; // 1 degree bins
-const starBins=new Array(starAzBins);
-for(let i=0;i<starAzBins;i++)starBins[i]=[];
+// --- stars (angular bins for fast lookup) ---
+const NSTARS=1400,SABINS=360;
+const starBins=new Array(SABINS);
+for(let i=0;i<SABINS;i++)starBins[i]=[];
 (function(){
   const r=rng(7);
   for(let i=0;i<NSTARS;i++){
@@ -113,84 +115,121 @@ for(let i=0;i<starAzBins;i++)starBins[i]=[];
     else if(t<.7){cr=1;cg=1;cb=.88}
     else if(t<.88){cr=1;cg=.85;cb=.65}
     else{cr=1;cg=.6;cb=.4}
-    const azDeg=((theta*RD)%360+360)%360|0;
-    const bin=azDeg%starAzBins;
-    starBins[bin].push({theta,phi,sinPhi:Math.sin(phi),cosPhi:Math.cos(phi),br,cr,cg,cb,tp:r()*TAU,tr:.2+r()*3,sz:r()<.025?2:r()<.1?1.3:.8});
+    const bin=((theta*RD)%360+360)%360|0;
+    starBins[bin%SABINS].push({theta,phi,br,cr,cg,cb,tp:r()*TAU,tr:.2+r()*3,sz:r()<.025?2:r()<.1?1.3:.8});
   }
 })();
 
 // --- params ---
-const P={time:12,lat:21,turb:3,cloud:.35,exp:1};
+const P={time:12,lat:21,lon:105.85,tz:7,turb:3,cloud:.35,exp:1,date:new Date(2026,5,21)};
 let playing=false,frame=0,needRender=true;
 
-// --- sun ---
-function sunPos(h,lat){
-  const ha=(h-12)*15*DG,la=lat*DG,dec=8*DG;
-  const sa=Math.sin(la)*Math.sin(dec)+Math.cos(la)*Math.cos(dec)*Math.cos(ha);
-  const alt=Math.asin(clp(sa,-1,1));
-  const ca=(Math.sin(dec)-Math.sin(la)*Math.sin(alt))/(Math.cos(la)*Math.cos(alt)+1e-10);
-  const az=Math.acos(clp(ca,-1,1));
-  const faz=ha>0?TAU-az:az;
-  return{alt,az:faz,dir:[Math.cos(alt)*Math.sin(faz),Math.sin(alt),Math.cos(alt)*Math.cos(faz)]};
+// --- solar position (full astronomical model) ---
+function dayOfYear(d){
+  const start=new Date(d.getFullYear(),0,0);
+  return Math.floor((d-start)/86400000);
+}
+
+function solarPosition(hours,lat,lon,tz,date){
+  const latR=lat*DG,lonR=lon*DG,tzM=tz*15*DG;
+  const jul=dayOfYear(date);
+
+  // equation of time
+  const solarTime=hours
+    +0.170*Math.sin(4*PI*(jul-80)/373)
+    -0.129*Math.sin(2*PI*(jul-8)/355)
+    +12*(tzM-lonR)/PI;
+
+  const dec=0.4093*Math.sin(2*PI*(jul-81)/368);
+
+  const sinL=Math.sin(latR),cosL=Math.cos(latR);
+  const sinD=Math.sin(dec),cosD=Math.cos(dec);
+  const cosHT=Math.cos(PI*solarTime/12);
+  const sinHT=Math.sin(PI*solarTime/12);
+
+  const sunZenith=PI/2-Math.asin(clp(sinL*sinD-cosL*cosD*cosHT,-1,1));
+  const sunAzimuth=Math.atan2(-cosD*sinHT,cosL*sinD-sinL*cosD*cosHT);
+  const sunAlt=PI/2-sunZenith;
+
+  return{zenith:sunZenith,azimuth:sunAzimuth,alt:sunAlt};
+}
+
+// --- Preetham sky model (1999) ---
+function calcZenitalAbsolutes(turb,sz){
+  const Yz=(4.0453*turb-4.9710)*Math.tan((4/9-turb/120)*(PI-2*sz))-0.2155*turb+2.4192;
+  const Y0=40;
+  const z3=sz*sz*sz,z2=sz*sz,z=sz;
+  const T2=turb*turb;
+  const xz=T2*(0.00166*z3-0.00375*z2+0.00209*z)
+        +turb*(-0.02903*z3+0.06377*z2-0.03202*z+0.00394)
+        +(0.11693*z3-0.21196*z2+0.06052*z+0.25886);
+  const yz=T2*(0.00275*z3-0.00610*z2+0.00317*z)
+        +turb*(-0.04214*z3+0.08970*z2-0.04153*z+0.00516)
+        +(0.15346*z3-0.26756*z2+0.06670*z+0.26688);
+  return{Yz:Yz/Y0,xz,yz};
+}
+
+function calcCoeffs(turb){
+  return{
+    Y:{A:0.1787*turb-1.4630, B:-0.3554*turb+0.4275, C:-0.0227*turb+5.3251, D:0.1206*turb-2.5771, E:-0.0670*turb+0.3703},
+    x:{A:-0.0193*turb-0.2592, B:-0.0665*turb+0.0008, C:-0.0004*turb+0.2125, D:-0.0641*turb-0.8989, E:-0.0033*turb+0.0452},
+    y:{A:-0.0167*turb-0.2608, B:-0.0950*turb+0.0092, C:-0.0079*turb+0.2102, D:-0.0441*turb-1.6537, E:-0.0109*turb+0.0529}
+  };
+}
+
+function perez(zenith,gamma,c){
+  const cosZ=Math.cos(clp(zenith,0,PI*.4999));
+  return(1+c.A*Math.exp(c.B/cosZ))*(1+c.C*Math.exp(c.D*gamma)+c.E*Math.cos(gamma)*Math.cos(gamma));
+}
+
+function yxyToRgb(Y,x,y){
+  if(y<=0)return{r:0,g:0,b:0};
+  const X=x/y*Y, Z=(1-x-y)/y*Y;
+  const gc=v=>Math.max(0,Math.min(1,Math.pow(v,1/1.8)));
+  return{
+    r:gc( 3.2406*X-1.5372*Y-0.4986*Z),
+    g:gc(-0.9689*X+1.8758*Y+0.0415*Z),
+    b:gc( 0.0557*X-0.2040*Y+1.0570*Z)
+  };
+}
+
+function skyColorPreetham(vz,va,zenAbs,coeffs,sunZen,sunAz){
+  const cosG=Math.sin(vz)*Math.sin(sunZen)*Math.cos(va-sunAz)+Math.cos(vz)*Math.cos(sunZen);
+  const gamma=Math.acos(clp(cosG,-1,1));
+  const vzC=clp(vz,0,PI*.4999);
+
+  const Yp=zenAbs.Yz*perez(vzC,gamma,coeffs.Y)/perez(0,sunZen,coeffs.Y);
+  const xp=zenAbs.xz*perez(vzC,gamma,coeffs.x)/perez(0,sunZen,coeffs.x);
+  const yp=zenAbs.yz*perez(vzC,gamma,coeffs.y)/perez(0,sunZen,coeffs.y);
+
+  return yxyToRgb(clp(Yp,0,1e6),clp(xp,0,1),clp(yp,0,1));
 }
 
 // --- ACES tonemap ---
 function aces(x){const a=2.51,b=.03,c=2.43,d=.59,e=.14;return clp((x*(a*x+b))/(x*(c*x+d)+e),0,1)}
 
-// --- sky color (analytic rayleigh + mie, fast) ---
-function skyAt(vz,va,sa,saz,turb){
-  // vz=view elevation (0=zenith,PI/2=horizon), va=view az, sa=sun zenith angle, saz=sun az
-  const cosG=Math.sin(vz)*Math.sin(sa)*Math.cos(va-saz)+Math.cos(vz)*Math.cos(sa);
-  const gamma=Math.acos(clp(cosG,-1,1));
-  const cosV=Math.cos(vz),cosS=Math.cos(sa),mu=cosG;
-
-  // rayleigh
-  const beta=[5.8e-6,13.5e-6,33.1e-6];
-  const opDepth=8500/(cosV+.08)+8500/(cosS+.08);
-  const T0=Math.exp(-beta[0]*opDepth),T1=Math.exp(-beta[1]*opDepth),T2=Math.exp(-beta[2]*opDepth);
-  const phR=3/(16*PI)*(1+mu*mu);
-  const sunI=Math.max(cosS,0);
-  // vz: 0=zenith (top of canvas), PI/2=horizon (bottom of sky)
-  const hzBright=1+.6*Math.exp(-(PI/2-vz)*4.5);
-
-  let r=beta[0]*phR*sunI*T0*hzBright*150000;
-  let g=beta[1]*phR*sunI*T1*hzBright*150000;
-  let b=beta[2]*phR*sunI*T2*hzBright*150000;
-
-  // mie
-  const gm=.76,g2=gm*gm;
-  const phM=3/(8*PI)*(1-g2)*(1+mu*mu)/((2+g2)*Math.pow(1+g2-2*gm*mu,1.5));
-  const mAmt=(turb-1)/9;
-  const mie=phM*sunI*mAmt*7500;
-  r+=mie;g+=mie;b+=mie*.8;
-
-  // mild darkening at very high elevation to prevent over-bright zenith
-  const zenithDark=1-sm(.15,0,vz)*.08;
-  r*=zenithDark;g*=zenithDark;b*=zenithDark;
-
-  return[r,g,b];
-}
-
 // --- render ---
 function render(){
   const img=X.createImageData(W,H);
   const d=img.data;
-  const sun=sunPos(P.time,P.lat);
-  const sa=Math.max(.01,PI/2-sun.alt); // sun zenith angle
-  const saz=sun.az;
-  const sunAlt=sun.alt;
-  const turb=P.turb;
-  const exp=P.exp;
-  const cc=P.cloud;
+
+  const sun=solarPosition(P.time,P.lat,P.lon,P.tz,P.date);
+  const sz=sun.zenith, saz=sun.azimuth, sunAlt=sun.alt;
+  const turb=P.turb, exp=P.exp, cc=P.cloud;
+
+  // Preetham model data
+  const zenAbs=calcZenitalAbsolutes(turb,clp(sz,0,PI*.499));
+  const coeffs=calcCoeffs(turb);
+
   const nightF=sm(.06,-.18,sunAlt);
   const dayF=sm(-.12,.22,sunAlt);
   const sunsetF=sm(-.06,.08,sunAlt)*(1-sm(.14,.38,sunAlt));
   const time=frame;
 
-  const horizY=H*.72|0; // horizon line
+  const horizY=H*.72|0;
 
   for(let y=0;y<H;y++){
-    const vz=(y/horizY)*PI/2;
+    const vz=(1-y/horizY)*PI/2;
     const isGround=y>horizY;
     const cosV=Math.cos(vz);
 
@@ -205,52 +244,66 @@ function render(){
       }
 
       const va=saz+(x/W-.5)*PI*.85;
-      const cosG=Math.sin(vz)*Math.sin(sa)*Math.cos(va-saz)+cosV*Math.cos(sa);
-      const gamma=Math.acos(clp(cosG,-1,1));
 
-      let[r,g,b]=skyAt(vz,va,sa,saz,turb);
+      // Preetham sky
+      let r=0,g=0,b=0;
+      if(sunAlt>-.2){
+        const sc=skyColorPreetham(vz,va,zenAbs,coeffs,sz,saz);
+        // Preetham output is 0-1, scale up for HDR before tonemapping
+        const sunI=Math.max(Math.cos(sz),0);
+        const scI=.25+sunI*.75; // dim when sun is low
+        r=sc.r*scI;
+        g=sc.g*scI;
+        b=sc.b*scI;
+      }
 
-      // horizon glow at sunset
+      // Preetham doesn't handle below horizon well -- smooth to night
+      if(nightF>0){
+        const nz=.003+.006*(1-vz/(PI/2));
+        r=mix(r,nz*.35,nightF);
+        g=mix(g,nz*.45,nightF);
+        b=mix(b,nz*1.1,nightF);
+      }
+
+      // extra sunset glow (Preetham is subtle, enhance it)
       if(sunsetF>0){
-        const hzP=sm(0,.28,vz);
+        const cosG=Math.sin(vz)*Math.sin(sz)*Math.cos(va-saz)+cosV*Math.cos(sz);
+        const gamma=Math.acos(clp(cosG,-1,1));
+        const hzP=sm(.28,0,vz);
         const ns=sm(.45,0,gamma);
         const glI=sunsetF*hzP*(.35+ns*.65)*(turb/5);
-        r+=glI*2.8;g+=glI*.9;b+=glI*.15;
-        // belt
+        r+=glI*1.4;g+=glI*.45;b+=glI*.08;
+        // opposite horizon belt
         const opp=sm(PI*.55,PI*.3,gamma);
-        if(opp>.1&&hzP>.4){const bl=sunsetF*hzP*opp*.35*(turb/5);r+=bl*1.6;g+=bl*.35}
+        if(opp>.1&&hzP>.4){const bl=sunsetF*hzP*opp*.2*(turb/5);r+=bl*.8;g+=bl*.18}
       }
 
       // sun disk
       if(sunAlt>-.12){
+        const cosG=Math.sin(vz)*Math.sin(sz)*Math.cos(va-saz)+cosV*Math.cos(sz);
+        const gamma=Math.acos(clp(cosG,-1,1));
         const sR=.00465*RD;
-        const gl=Math.exp(-gamma*gamma/(.013*.013))*.25;
+        const gl=Math.exp(-gamma*gamma/(.013*.013))*.3;
         const dk=sm(sR*2.5,sR*1,gamma);
         const sG=sm(-.1,.18,sunAlt),sB=sm(.02,.32,sunAlt);
-        const si=dk*38+gl*14;
+        const si=dk*40+gl*18;
         r+=si;g+=sG*si;b+=sB*si;
-      }
-
-      // night transition
-      if(nightF>.0){
-        const nz=.003+.006*(1-vz/(PI/2));
-        r=mix(r,nz*.35,nightF);g=mix(g,nz*.45,nightF);b=mix(b,nz*1.1,nightF);
       }
 
       // stars
       if(nightF>.005){
-        // find relevant star bins
         const vaDeg=((va*RD)%360+360)%360|0;
         for(let bi=-2;bi<=2;bi++){
-          const bin=(vaDeg+bi+starAzBins)%starAzBins;
+          const bin=(vaDeg+bi+SABINS)%SABINS;
           const stars=starBins[bin];
           for(let si=0;si<stars.length;si++){
             const s=stars[si];
             const dAz=Math.abs(va-s.theta);
             if(dAz>PI)dAz=TAU-dAz;
-            if(dAz>.05)continue; // skip if azimuth too far
+            if(dAz>.05)continue;
+            const sd=[Math.sin(s.phi)*Math.cos(s.theta),Math.cos(s.phi),Math.sin(s.phi)*Math.sin(s.theta)];
             const sg=Math.acos(clp(
-              Math.sin(vz)*s.sinPhi*Math.cos(va-s.theta)+cosV*s.cosPhi,-1,1));
+              Math.sin(vz)*sd[0]*Math.cos(va-s.theta)+cosV*sd[1],-1,1));
             const sR2=s.sz*1.6/W;
             if(sg<sR2*5){
               const ff=Math.exp(-sg*sg/(2*sR2*sR2));
@@ -284,6 +337,8 @@ function render(){
         const thr=1-cc;
         if(dn>thr){
           dn=sm(thr,thr+.3,dn);
+          const cosG=Math.sin(vz)*Math.sin(sz)*Math.cos(va-saz)+cosV*Math.cos(sz);
+          const gamma=Math.acos(clp(cosG,-1,1));
           const cD=sm(-.06,.16,sunAlt);
           const cS=sm(-.06,.07,sunAlt)*(1-sm(.12,.32,sunAlt));
           const sil=sm(PI/3,PI/8,gamma)*sm(-.02,.1,sunAlt)*.35;
@@ -291,13 +346,13 @@ function render(){
           if(nightF>.6){cr2=.018+sil*.12;cg2=.022+sil*.1;cb2=.035+sil*.16}
           else{cr2=.82*cD+.55*cS+sil;cg2=.84*cD+.22*cS+sil*.85;cb2=.9*cD+.06*cS+sil*.65}
           const sh=1-dn*.22;cr2*=sh;cg2*=sh;cb2*=sh;
-          const bd=sm(0,.16,vz)*.25;cr2*=(1-bd);cg2*=(1-bd*.75);cb2*=(1-bd*.4);
+          const bd=sm(.16,0,vz)*.25;cr2*=(1-bd);cg2*=(1-bd*.75);cb2*=(1-bd*.4);
           const al=dn*(.45+cD*.4);
           r=mix(r,cr2,al);g=mix(g,cg2,al);b=mix(b,cb2,al);
         }
       }
 
-      // tonemap
+      // tonemap + gamma
       const tr=aces(r*exp),tg=aces(g*exp),tb=aces(b*exp);
       d[i]=Math.pow(tr,1/2.2)*255|0;
       d[i+1]=Math.pow(tg,1/2.2)*255|0;
@@ -318,7 +373,7 @@ function sync(){
   $("ve").textContent=P.exp.toFixed(2);
   $("ct").value=P.time;$("cl").value=P.lat;$("cb").value=P.turb;
   $("cc").value=P.cloud;$("ce").value=P.exp;
-  const s=sunPos(P.time,P.lat);
+  const s=solarPosition(P.time,P.lat,P.lon,P.tz,P.date);
   $("he").textContent=(s.alt*RD).toFixed(0);
   $("ht").textContent=ts;$("hl").textContent=P.lat.toFixed(1);
 }
@@ -327,6 +382,7 @@ $("cl").oninput=()=>{P.lat=+$("cl").value;sync();needRender=true};
 $("cb").oninput=()=>{P.turb=+$("cb").value;sync();needRender=true};
 $("cc").oninput=()=>{P.cloud=+$("cc").value;sync();needRender=true};
 $("ce").oninput=()=>{P.exp=+$("ce").value;sync();needRender=true};
+$("cd").oninput=()=>{P.date=new Date($("cd").value+"T00:00:00");sync();needRender=true};
 $("pb").onclick=()=>{playing=!playing;$("pb").textContent=playing?"pause":"play day cycle"};
 
 (function loop(){
