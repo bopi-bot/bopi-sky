@@ -91,7 +91,6 @@
 const C=document.getElementById("sky"),X=C.getContext("2d");
 const PI=Math.PI,TAU=PI*2,DG=PI/180,RD=180/PI;
 const clp=(x,a,b)=>x<a?a:x>b?b:x;
-const mix=(a,b,t)=>a+(b-a)*t;
 const sm=(a,b,x)=>{const t=clp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
 
 function resize(){
@@ -181,9 +180,6 @@ function skyColorPreetham(vz,va,zenAbs,coeffs,sunZen,sunAz){
   return yxyToRgb(clp(Yp,0,1e6),clp(xp,0,1),clp(yp,0,1));
 }
 
-// --- ACES tonemap ---
-function aces(x){const a=2.51,b=.03,c=2.43,d=.59,e=.14;return clp((x*(a*x+b))/(x*(c*x+d)+e),0,1)}
-
 // --- render ---
 function render(){
   const img=X.createImageData(W,H);
@@ -227,41 +223,31 @@ function render(){
       const cosG=dirX*sunX+dirY*sunY+dirZ*sunZ;
       const gamma=Math.acos(clp(cosG,-1,1));
 
-      // preetham sky
+      // preetham sky (the model handles horizon brightening natively)
       const sc=skyColorPreetham(vz,va,zenAbs,coeffs,sz,saz);
+      let r=sc.r,g=sc.g,b=sc.b;
 
-      // horizon brightening -- real skies are brighter near horizon due to longer path length
-      const horizBright=1+sm(.6,PI/2,vz)*.4;
-
-      let r=sc.r*horizBright,g=sc.g*horizBright,b=sc.b*horizBright;
-
-      // aerial perspective / atmospheric haze near horizon
-      if(vz>PI/3){
-        const hazeF=sm(PI/3,PI/2,vz);
-        const hzR=.65,hzG=.72,hzB=.82;
-        r=mix(r,hzR,hazeF*.15);
-        g=mix(g,hzG,hazeF*.15);
-        b=mix(b,hzB,hazeF*.15);
-      }
-
-      // sun disk + realistic atmospheric glow
+      // sun disk only
       if(sunAlt>-.2){
         const sR=.00465*RD;
         const dk=sm(sR*2.5,sR*1,gamma);
-        const rayG=Math.exp(-gamma*gamma/(.002*.002))*.03;
-        const mieG=Math.exp(-gamma/.15)*.008;
-        const circG=Math.exp(-gamma/.05)*.01;
+        const gl=Math.exp(-gamma*gamma/(.004*.004))*.02;
         const sG=sm(-.1,.18,sunAlt),sB=sm(.02,.32,sunAlt);
         const fade=sm(-.2,.05,sunAlt);
-        const si=(dk*18+rayG*8+mieG*6+circG*4)*fade;
+        const si=(dk*20+gl*6)*fade;
         r+=si;g+=sG*si;b+=sB*si;
       }
 
-      // tonemap + gamma
-      const tr=aces(r*exp),tg=aces(g*exp),tb=aces(b*exp);
-      d[i]=Math.pow(tr,1/2.2)*255|0;
-      d[i+1]=Math.pow(tg,1/2.2)*255|0;
-      d[i+2]=Math.pow(tb,1/2.2)*255|0;
+      // exposure + reinhard tonemap + srgb gamma
+      const L=.2126*r+.7152*g+.0722*b;
+      const Lw=exp*4;
+      const Lw2=Lw*Lw;
+      const rein=(c)=>c*exp*(1+c*exp/Lw2)/(1+c*exp);
+      r=rein(r);g=rein(g);b=rein(b);
+      const gm=1/2.2;
+      d[i]=Math.pow(clp(r,0,1),gm)*255|0;
+      d[i+1]=Math.pow(clp(g,0,1),gm)*255|0;
+      d[i+2]=Math.pow(clp(b,0,1),gm)*255|0;
       d[i+3]=255;
     }
   }
