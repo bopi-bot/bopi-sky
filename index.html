@@ -75,19 +75,7 @@
         <input type="range" id="ce" min="0.1" max="3" step="0.05" value="1.0" class="flex-1">
         <span class="text-xs text-black/40 min-w-[3rem] text-right font-mono" id="ve">1.00</span>
       </div>
-      <div class="mt-2 pt-2 border-t border-black/5">
-        <p class="text-xs text-black/30 lowercase mb-2">camera</p>
-      </div>
-      <div class="flex items-center gap-3">
-        <label class="text-xs text-black/40 lowercase min-w-[3.5rem]">azimuth</label>
-        <input type="range" id="ca" min="0" max="360" step="1" value="180" class="flex-1">
-        <span class="text-xs text-black/40 min-w-[3rem] text-right font-mono" id="va">180</span>
-      </div>
-      <div class="flex items-center gap-3">
-        <label class="text-xs text-black/40 lowercase min-w-[3.5rem]">fov</label>
-        <input type="range" id="cf" min="20" max="160" step="1" value="75" class="flex-1">
-        <span class="text-xs text-black/40 min-w-[3rem] text-right font-mono" id="vf">75</span>
-      </div>
+
     </div>
 
     <p class="text-xs text-black/30 lowercase mt-4 leading-relaxed">based on the preetham 1999 analytic daylight model. scratchapixel tutorial for rayleigh/mie scattering fundamentals.</p>
@@ -111,7 +99,7 @@ function resize(){
 addEventListener("resize",resize);
 
 // --- params ---
-const P={time:12,lat:21,lon:105.85,tz:7,turb:3,exp:1,az:PI,fov:75*DG,date:new Date(2026,5,21)};
+const P={time:12,lat:21,lon:105.85,tz:7,turb:3,exp:1,date:new Date(2026,5,21)};
 let playing=false,frame=0,needRender=false,W=1,H=1;
 
 // --- solar position (full astronomical model) ---
@@ -203,7 +191,6 @@ function render(){
   const sun=solarPosition(P.time,P.lat,P.lon,P.tz,P.date);
   const sz=sun.zenith, saz=sun.azimuth, sunAlt=sun.alt;
   const turb=P.turb, exp=P.exp;
-  const camAz=P.az, camFov=P.fov;
 
   const zenAbs=calcZenitalAbsolutes(turb,sz);
   const coeffs=calcCoeffs(turb);
@@ -212,10 +199,6 @@ function render(){
 
   const horizY=H; // full sky, no ground
 
-  // precompute camera basis vectors
-  const cosCamAz=Math.cos(camAz),sinCamAz=Math.sin(camAz);
-  const halfFov=camFov/2;
-
   for(let y=0;y<H;y++){
     const vz=(1-y/horizY)*PI/2;
     const cosV=Math.cos(vz);
@@ -223,8 +206,8 @@ function render(){
     for(let x=0;x<W;x++){
       const i=(y*W+x)<<2;
 
-      // camera with controllable azimuth and fov
-      const va=camAz+(x/W-.5)*camFov;
+      // full 360 equirectangular sky dome
+      const va=(x/W)*TAU;
 
       // compute angular distance to sun (reused in multiple places)
       const cosG=Math.sin(vz)*Math.sin(sz)*Math.cos(va-saz)+cosV*Math.cos(sz);
@@ -276,10 +259,8 @@ function sync(){
   $("vt").textContent=ts;$("vl").textContent=P.lat.toFixed(1);
   $("vb").textContent=P.turb.toFixed(1);
   $("ve").textContent=P.exp.toFixed(2);
-  $("va").textContent=(P.az*RD).toFixed(0);
-  $("vf").textContent=(P.fov*RD).toFixed(0);
   $("ct").value=P.time;$("cl").value=P.lat;$("cb").value=P.turb;
-  $("ce").value=P.exp;$("ca").value=P.az*RD;$("cf").value=P.fov*RD;
+  $("ce").value=P.exp;
   const s=solarPosition(P.time,P.lat,P.lon,P.tz,P.date);
   $("he").textContent=(s.alt*RD).toFixed(0);
   $("ht").textContent=ts;
@@ -288,8 +269,6 @@ $("ct").oninput=()=>{P.time=+$("ct").value;sync();needRender=true};
 $("cl").oninput=()=>{P.lat=+$("cl").value;sync();needRender=true};
 $("cb").oninput=()=>{P.turb=+$("cb").value;sync();needRender=true};
 $("ce").oninput=()=>{P.exp=+$("ce").value;sync();needRender=true};
-$("ca").oninput=()=>{P.az=+$("ca").value*DG;sync();needRender=true};
-$("cf").oninput=()=>{P.fov=+$("cf").value*DG;sync();needRender=true};
 $("cd").oninput=()=>{P.date=new Date($("cd").value+"T00:00:00");sync();needRender=true};
 $("pb").onclick=()=>{playing=!playing;$("pb").textContent=playing?"pause":"play"};
 
