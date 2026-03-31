@@ -7,60 +7,84 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { cream: '#FFFBF0', bolt: '#005EEA' },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        },
+      },
+    }
+  </script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { -webkit-font-smoothing: antialiased; font-family: 'Inter', system-ui, sans-serif; background: #000; overflow: hidden; height: 100vh; width: 100vw; }
-    canvas#sky { display: block; width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; image-rendering: auto; }
-    .hud {
-      position: fixed; top: 1.25rem; left: 50%; transform: translateX(-50%);
-      background: rgba(10,10,15,0.55); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-      border-radius: 0.5rem; padding: 0.45rem 0.9rem; z-index: 10;
-      display: flex; gap: 1.25rem; align-items: center;
-    }
-    .hud span { font-size: 0.6875rem; color: rgba(255,255,255,0.4); text-transform: lowercase; letter-spacing: -0.01em; }
-    .hud b { color: rgba(255,255,255,0.8); font-weight: 500; }
-    .btn {
-      position: fixed; top: 1.25rem; right: 1.25rem;
-      background: rgba(10,10,15,0.5); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-      border: none; border-radius: 0.5rem; padding: 0.45rem 0.8rem;
-      color: rgba(255,255,255,0.5); font-family: 'Inter', system-ui, sans-serif;
-      font-size: 0.6875rem; text-transform: lowercase; cursor: pointer; z-index: 10;
-    }
-    .btn:hover { color: rgba(255,255,255,0.7); }
-    .panel {
-      position: fixed; bottom: 1.25rem; left: 50%; transform: translateX(-50%);
-      background: rgba(10,10,15,0.7); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-      border-radius: 0.75rem; padding: 0.7rem 0.9rem;
-      display: flex; flex-direction: column; gap: 0.45rem;
-      z-index: 10; min-width: 300px; max-width: calc(100vw - 1.5rem);
-    }
-    .r { display: flex; align-items: center; gap: 0.7rem; }
-    .r label { font-size: 0.625rem; color: rgba(255,255,255,0.42); text-transform: lowercase; min-width: 4rem; user-select: none; }
-    .r input[type=range] { flex: 1; -webkit-appearance: none; appearance: none; height: 2px; background: rgba(255,255,255,0.1); border-radius: 1px; outline: none; cursor: pointer; }
-    .r input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,0.85); cursor: pointer; }
-    .r input[type=date] {
-      flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 0.25rem; padding: 0.2rem 0.4rem; color: rgba(255,255,255,0.6);
-      font-family: 'Inter', system-ui, sans-serif; font-size: 0.5625rem; text-transform: lowercase;
-      outline: none; cursor: pointer;
-    }
-    .r input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.5); cursor: pointer; }
-    .r .v { font-size: 0.5625rem; color: rgba(255,255,255,0.3); min-width: 3rem; text-align: right; font-variant-numeric: tabular-nums; user-select: none; }
-    @media(max-width:480px) { .panel { min-width: 0; padding: 0.55rem 0.65rem; } .r label { min-width: 3.25rem; font-size: 0.5625rem; } }
+    body { -webkit-font-smoothing: antialiased; }
+    ::selection { background: rgba(0,94,234,0.15); }
+    canvas#sky { display: block; width: 100%; border-radius: 0.25rem; image-rendering: auto; }
+    input[type=range] { -webkit-appearance: none; appearance: none; height: 2px; background: rgba(0,0,0,0.08); border-radius: 1px; outline: none; cursor: pointer; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #005EEA; cursor: pointer; }
+    input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #005EEA; cursor: pointer; border: none; }
+    input[type=date] { background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.06); border-radius: 0.25rem; padding: 0.25rem 0.5rem; color: rgba(0,0,0,0.5); font-family: 'Inter', system-ui, sans-serif; font-size: 0.8125rem; text-transform: lowercase; outline: none; cursor: pointer; }
+    input[type=date]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.4; }
   </style>
 </head>
-<body>
-<canvas id="sky"></canvas>
-<div class="hud"><span>sun <b id="he">45</b> deg</span><span><b id="ht">12:00</b></span><span><b id="hl">21.0</b> lat</span></div>
-<button class="btn" id="pb">play day cycle</button>
-<div class="panel">
-  <div class="r"><label>date</label><input type="date" id="cd" value="2026-06-21"><div class="v"></div></div>
-  <div class="r"><label>time</label><input type="range" id="ct" min="0" max="24" step="0.02" value="12"><div class="v" id="vt">12:00</div></div>
-  <div class="r"><label>latitude</label><input type="range" id="cl" min="-90" max="90" step="0.5" value="21"><div class="v" id="vl">21.0</div></div>
-  <div class="r"><label>turbidity</label><input type="range" id="cb" min="1" max="10" step="0.1" value="3"><div class="v" id="vb">3.0</div></div>
-  <div class="r"><label>clouds</label><input type="range" id="cc" min="0" max="1" step="0.01" value="0.35"><div class="v" id="vc">0.35</div></div>
-  <div class="r"><label>exposure</label><input type="range" id="ce" min="0.1" max="3" step="0.05" value="1.0"><div class="v" id="ve">1.00</div></div>
-</div>
+<body class="bg-cream text-gray-900 font-sans">
+
+  <div class="max-w-2xl mx-auto px-6 pt-8 pb-6">
+    <p class="text-sm text-black/40 lowercase tracking-tight">atmospheric sky simulation</p>
+    <h1 class="text-xl font-normal lowercase tracking-tight leading-snug mt-1">sky sim</h1>
+    <p class="text-sm text-black/50 lowercase leading-relaxed mt-2">preetham sky model with rayleigh and mie scattering. drag the time slider past 18:00 for sunset into night.</p>
+  </div>
+
+  <main class="max-w-2xl mx-auto px-6 pb-6">
+    <!-- canvas -->
+    <div class="relative">
+      <canvas id="sky"></canvas>
+      <!-- hud overlay -->
+      <div class="absolute top-3 left-3 flex gap-3 items-center bg-black/20 backdrop-blur-md rounded px-3 py-1.5">
+        <span class="text-[0.6875rem] text-white/50 lowercase">sun <span class="text-white/80 font-medium" id="he">45</span> deg</span>
+        <span class="text-[0.6875rem] text-white/80 font-medium" id="ht">12:00</span>
+      </div>
+      <button id="pb" class="absolute top-3 right-3 bg-black/20 backdrop-blur-md rounded px-3 py-1.5 text-[0.6875rem] text-white/50 lowercase cursor-pointer hover:text-white/70 transition-colors font-sans">play</button>
+    </div>
+
+    <!-- controls -->
+    <div class="mt-4 flex flex-col gap-3">
+      <div class="flex items-center gap-3">
+        <label class="text-xs text-black/40 lowercase min-w-[3.5rem]">date</label>
+        <input type="date" id="cd" value="2026-06-21" class="flex-1">
+      </div>
+      <div class="flex items-center gap-3">
+        <label class="text-xs text-black/40 lowercase min-w-[3.5rem]">time</label>
+        <input type="range" id="ct" min="0" max="24" step="0.02" value="12" class="flex-1">
+        <span class="text-xs text-black/40 min-w-[3rem] text-right font-mono" id="vt">12:00</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <label class="text-xs text-black/40 lowercase min-w-[3.5rem]">latitude</label>
+        <input type="range" id="cl" min="-90" max="90" step="0.5" value="21" class="flex-1">
+        <span class="text-xs text-black/40 min-w-[3rem] text-right font-mono" id="vl">21.0</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <label class="text-xs text-black/40 lowercase min-w-[3.5rem]">turbidity</label>
+        <input type="range" id="cb" min="1" max="10" step="0.1" value="3" class="flex-1">
+        <span class="text-xs text-black/40 min-w-[3rem] text-right font-mono" id="vb">3.0</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <label class="text-xs text-black/40 lowercase min-w-[3.5rem]">clouds</label>
+        <input type="range" id="cc" min="0" max="1" step="0.01" value="0.35" class="flex-1">
+        <span class="text-xs text-black/40 min-w-[3rem] text-right font-mono" id="vc">0.35</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <label class="text-xs text-black/40 lowercase min-w-[3.5rem]">exposure</label>
+        <input type="range" id="ce" min="0.1" max="3" step="0.05" value="1.0" class="flex-1">
+        <span class="text-xs text-black/40 min-w-[3rem] text-right font-mono" id="ve">1.00</span>
+      </div>
+    </div>
+
+    <p class="text-xs text-black/30 lowercase mt-4 leading-relaxed">based on the preetham 1999 analytic daylight model. scratchapixel tutorial for rayleigh/mie scattering fundamentals.</p>
+  </main>
+
 <script>
 "use strict";
 const C=document.getElementById("sky"),X=C.getContext("2d");
@@ -71,11 +95,16 @@ const sm=(a,b,x)=>{const t=clp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
 
 let W,H;
 function resize(){
-  W=C.width=Math.round(innerWidth*.55);
-  H=C.height=Math.round(innerHeight*.55);
+  const container=C.parentElement;
+  const w=container.clientWidth;
+  const h=Math.round(w*9/16); // 16:9 aspect ratio
+  C.width=Math.round(w*.5);  // render at half res, CSS scales up
+  C.height=Math.round(h*.5);
+  C.style.height=h+'px';
+  W=C.width; H=C.height;
+  needRender=true;
 }
-addEventListener("resize",()=>{resize();needRender=true});
-resize();
+addEventListener("resize",resize);
 
 // --- noise ---
 const PM=new Uint8Array(512),GX=new Float32Array(256),GY=new Float32Array(256);
@@ -99,7 +128,7 @@ function noise2(x,y){
 
 function fbm(x,y,oct,lac,gain){let v=0,a=.5,f=1;for(let i=0;i<oct;i++){v+=a*noise2(x*f,y*f);f*=lac;a*=gain}return v}
 
-// --- stars (angular bins for fast lookup) ---
+// --- stars ---
 const NSTARS=1400,SABINS=360;
 const starBins=new Array(SABINS);
 for(let i=0;i<SABINS;i++)starBins[i]=[];
@@ -125,40 +154,31 @@ const P={time:12,lat:21,lon:105.85,tz:7,turb:3,cloud:.35,exp:1,date:new Date(202
 let playing=false,frame=0,needRender=true;
 
 // --- solar position (full astronomical model) ---
-function dayOfYear(d){
-  const start=new Date(d.getFullYear(),0,0);
-  return Math.floor((d-start)/86400000);
-}
+function dayOfYear(d){const s=new Date(d.getFullYear(),0,0);return Math.floor((d-s)/86400000)}
 
 function solarPosition(hours,lat,lon,tz,date){
   const latR=lat*DG,lonR=lon*DG,tzM=tz*15*DG;
   const jul=dayOfYear(date);
-
-  // equation of time
   const solarTime=hours
     +0.170*Math.sin(4*PI*(jul-80)/373)
     -0.129*Math.sin(2*PI*(jul-8)/355)
     +12*(tzM-lonR)/PI;
-
   const dec=0.4093*Math.sin(2*PI*(jul-81)/368);
-
   const sinL=Math.sin(latR),cosL=Math.cos(latR);
   const sinD=Math.sin(dec),cosD=Math.cos(dec);
   const cosHT=Math.cos(PI*solarTime/12);
   const sinHT=Math.sin(PI*solarTime/12);
-
   const sunZenith=PI/2-Math.asin(clp(sinL*sinD-cosL*cosD*cosHT,-1,1));
   const sunAzimuth=Math.atan2(-cosD*sinHT,cosL*sinD-sinL*cosD*cosHT);
-  const sunAlt=PI/2-sunZenith;
-
-  return{zenith:sunZenith,azimuth:sunAzimuth,alt:sunAlt};
+  return{zenith:sunZenith,azimuth:sunAzimuth,alt:PI/2-sunZenith};
 }
 
 // --- Preetham sky model (1999) ---
 function calcZenitalAbsolutes(turb,sz){
-  const Yz=(4.0453*turb-4.9710)*Math.tan((4/9-turb/120)*(PI-2*sz))-0.2155*turb+2.4192;
+  const szC=clp(sz,0,1.4835); // clamp to 85 deg for model stability
+  const Yz=(4.0453*turb-4.9710)*Math.tan((4/9-turb/120)*(PI-2*szC))-0.2155*turb+2.4192;
   const Y0=40;
-  const z3=sz*sz*sz,z2=sz*sz,z=sz;
+  const z3=szC*szC*szC,z2=szC*szC,z=szC;
   const T2=turb*turb;
   const xz=T2*(0.00166*z3-0.00375*z2+0.00209*z)
         +turb*(-0.02903*z3+0.06377*z2-0.03202*z+0.00394)
@@ -166,7 +186,7 @@ function calcZenitalAbsolutes(turb,sz){
   const yz=T2*(0.00275*z3-0.00610*z2+0.00317*z)
         +turb*(-0.04214*z3+0.08970*z2-0.04153*z+0.00516)
         +(0.15346*z3-0.26756*z2+0.06670*z+0.26688);
-  return{Yz:Yz/Y0,xz,yz};
+  return{Yz:clp(Yz/Y0,0,1e6),xz:clp(xz,0,1),yz:clp(yz,0,1)};
 }
 
 function calcCoeffs(turb){
@@ -178,14 +198,16 @@ function calcCoeffs(turb){
 }
 
 function perez(zenith,gamma,c){
-  const cosZ=Math.cos(clp(zenith,0,PI*.4999));
-  return(1+c.A*Math.exp(c.B/cosZ))*(1+c.C*Math.exp(c.D*gamma)+c.E*Math.cos(gamma)*Math.cos(gamma));
+  const cosZ=Math.max(Math.cos(clp(zenith,0,PI*.499)),0.001);
+  const term1=1+c.A*Math.exp(c.B/cosZ);
+  const term2=1+c.C*Math.exp(c.D*gamma)+c.E*Math.cos(gamma)*Math.cos(gamma);
+  return Math.max(term1*term2,0);
 }
 
 function yxyToRgb(Y,x,y){
   if(y<=0)return{r:0,g:0,b:0};
   const X=x/y*Y, Z=(1-x-y)/y*Y;
-  const gc=v=>Math.max(0,Math.min(1,Math.pow(v,1/1.8)));
+  const gc=v=>Math.max(0,Math.min(1,Math.pow(clp(v,0,1e6),1/1.8)));
   return{
     r:gc( 3.2406*X-1.5372*Y-0.4986*Z),
     g:gc(-0.9689*X+1.8758*Y+0.0415*Z),
@@ -196,11 +218,16 @@ function yxyToRgb(Y,x,y){
 function skyColorPreetham(vz,va,zenAbs,coeffs,sunZen,sunAz){
   const cosG=Math.sin(vz)*Math.sin(sunZen)*Math.cos(va-sunAz)+Math.cos(vz)*Math.cos(sunZen);
   const gamma=Math.acos(clp(cosG,-1,1));
-  const vzC=clp(vz,0,PI*.4999);
+  const vzC=clp(vz,0,PI*.499);
+  const szC=clp(sunZen,0,1.4835);
 
-  const Yp=zenAbs.Yz*perez(vzC,gamma,coeffs.Y)/perez(0,sunZen,coeffs.Y);
-  const xp=zenAbs.xz*perez(vzC,gamma,coeffs.x)/perez(0,sunZen,coeffs.x);
-  const yp=zenAbs.yz*perez(vzC,gamma,coeffs.y)/perez(0,sunZen,coeffs.y);
+  const pYzen=perez(0,szC,coeffs.Y);
+  const pXzen=perez(0,szC,coeffs.x);
+  const pYZen=perez(0,szC,coeffs.y);
+
+  const Yp=pYzen>0?zenAbs.Yz*perez(vzC,gamma,coeffs.Y)/pYzen:0;
+  const xp=pXzen>0?zenAbs.xz*perez(vzC,gamma,coeffs.x)/pXzen:0;
+  const yp=pYZen>0?zenAbs.yz*perez(vzC,gamma,coeffs.y)/pYZen:0;
 
   return yxyToRgb(clp(Yp,0,1e6),clp(xp,0,1),clp(yp,0,1));
 }
@@ -217,13 +244,14 @@ function render(){
   const sz=sun.zenith, saz=sun.azimuth, sunAlt=sun.alt;
   const turb=P.turb, exp=P.exp, cc=P.cloud;
 
-  // Preetham model data
-  const zenAbs=calcZenitalAbsolutes(turb,clp(sz,0,PI*.499));
+  const zenAbs=calcZenitalAbsolutes(turb,sz);
   const coeffs=calcCoeffs(turb);
 
-  const nightF=sm(.06,-.18,sunAlt);
-  const dayF=sm(-.12,.22,sunAlt);
-  const sunsetF=sm(-.06,.08,sunAlt)*(1-sm(.14,.38,sunAlt));
+  // smooth transitions
+  const nightF=sm(.05,-.2,sunAlt);     // 0 in day, 1 at night
+  const dayF=sm(-.15,.25,sunAlt);      // 1 in full day, 0 at night
+  const sunsetF=sm(-.08,.1,sunAlt)*(1-sm(.15,.4,sunAlt)); // peak near horizon
+  const preethamF=sm(-.05,.1,sunAlt);  // fade out preetham below -5 deg
   const time=frame;
 
   const horizY=H*.72|0;
@@ -245,43 +273,40 @@ function render(){
 
       const va=saz+(x/W-.5)*PI*.85;
 
-      // Preetham sky
-      let r=0,g=0,b=0;
-      if(sunAlt>-.2){
+      // compute angular distance to sun (reused in multiple places)
+      const cosG=Math.sin(vz)*Math.sin(sz)*Math.cos(va-saz)+cosV*Math.cos(sz);
+      const gamma=Math.acos(clp(cosG,-1,1));
+
+      // start with night sky
+      const nz=.003+.006*(1-vz/(PI/2));
+      let r=nz*.35, g=nz*.45, b=nz*1.1;
+
+      // preetham sky (only when sun is above -5 deg)
+      if(preethamF>0){
         const sc=skyColorPreetham(vz,va,zenAbs,coeffs,sz,saz);
-        // Preetham output is 0-1, scale up for HDR before tonemapping
-        const sunI=Math.max(Math.cos(sz),0);
-        const scI=.25+sunI*.75; // dim when sun is low
-        r=sc.r*scI;
-        g=sc.g*scI;
-        b=sc.b*scI;
+        const sunI=Math.max(Math.cos(clp(sz,0,1.4835)),0);
+        const scI=(.25+sunI*.75)*preethamF;
+        r=mix(r,sc.r*scI,preethamF);
+        g=mix(r,sc.g*scI,preethamF);
+        // recompute to avoid cascading mix
+        const nr=mix(nz*.35,sc.r*scI,preethamF);
+        const ng=mix(nz*.45,sc.g*scI,preethamF);
+        const nb=mix(nz*1.1,sc.b*scI,preethamF);
+        r=nr;g=ng;b=nb;
       }
 
-      // Preetham doesn't handle below horizon well -- smooth to night
-      if(nightF>0){
-        const nz=.003+.006*(1-vz/(PI/2));
-        r=mix(r,nz*.35,nightF);
-        g=mix(g,nz*.45,nightF);
-        b=mix(b,nz*1.1,nightF);
-      }
-
-      // extra sunset glow (Preetham is subtle, enhance it)
+      // sunset glow (supplementary to preetham which is subtle at low sun)
       if(sunsetF>0){
-        const cosG=Math.sin(vz)*Math.sin(sz)*Math.cos(va-saz)+cosV*Math.cos(sz);
-        const gamma=Math.acos(clp(cosG,-1,1));
         const hzP=sm(.28,0,vz);
         const ns=sm(.45,0,gamma);
         const glI=sunsetF*hzP*(.35+ns*.65)*(turb/5);
         r+=glI*1.4;g+=glI*.45;b+=glI*.08;
-        // opposite horizon belt
         const opp=sm(PI*.55,PI*.3,gamma);
         if(opp>.1&&hzP>.4){const bl=sunsetF*hzP*opp*.2*(turb/5);r+=bl*.8;g+=bl*.18}
       }
 
       // sun disk
       if(sunAlt>-.12){
-        const cosG=Math.sin(vz)*Math.sin(sz)*Math.cos(va-saz)+cosV*Math.cos(sz);
-        const gamma=Math.acos(clp(cosG,-1,1));
         const sR=.00465*RD;
         const gl=Math.exp(-gamma*gamma/(.013*.013))*.3;
         const dk=sm(sR*2.5,sR*1,gamma);
@@ -290,7 +315,7 @@ function render(){
         r+=si;g+=sG*si;b+=sB*si;
       }
 
-      // stars
+      // stars (only at night)
       if(nightF>.005){
         const vaDeg=((va*RD)%360+360)%360|0;
         for(let bi=-2;bi<=2;bi++){
@@ -302,8 +327,7 @@ function render(){
             if(dAz>PI)dAz=TAU-dAz;
             if(dAz>.05)continue;
             const sd=[Math.sin(s.phi)*Math.cos(s.theta),Math.cos(s.phi),Math.sin(s.phi)*Math.sin(s.theta)];
-            const sg=Math.acos(clp(
-              Math.sin(vz)*sd[0]*Math.cos(va-s.theta)+cosV*sd[1],-1,1));
+            const sg=Math.acos(clp(Math.sin(vz)*sd[0]*Math.cos(va-s.theta)+cosV*sd[1],-1,1));
             const sR2=s.sz*1.6/W;
             if(sg<sR2*5){
               const ff=Math.exp(-sg*sg/(2*sR2*sR2));
@@ -337,8 +361,6 @@ function render(){
         const thr=1-cc;
         if(dn>thr){
           dn=sm(thr,thr+.3,dn);
-          const cosG=Math.sin(vz)*Math.sin(sz)*Math.cos(va-saz)+cosV*Math.cos(sz);
-          const gamma=Math.acos(clp(cosG,-1,1));
           const cD=sm(-.06,.16,sunAlt);
           const cS=sm(-.06,.07,sunAlt)*(1-sm(.12,.32,sunAlt));
           const sil=sm(PI/3,PI/8,gamma)*sm(-.02,.1,sunAlt)*.35;
@@ -375,7 +397,7 @@ function sync(){
   $("cc").value=P.cloud;$("ce").value=P.exp;
   const s=solarPosition(P.time,P.lat,P.lon,P.tz,P.date);
   $("he").textContent=(s.alt*RD).toFixed(0);
-  $("ht").textContent=ts;$("hl").textContent=P.lat.toFixed(1);
+  $("ht").textContent=ts;
 }
 $("ct").oninput=()=>{P.time=+$("ct").value;sync();needRender=true};
 $("cl").oninput=()=>{P.lat=+$("cl").value;sync();needRender=true};
@@ -383,14 +405,15 @@ $("cb").oninput=()=>{P.turb=+$("cb").value;sync();needRender=true};
 $("cc").oninput=()=>{P.cloud=+$("cc").value;sync();needRender=true};
 $("ce").oninput=()=>{P.exp=+$("ce").value;sync();needRender=true};
 $("cd").oninput=()=>{P.date=new Date($("cd").value+"T00:00:00");sync();needRender=true};
-$("pb").onclick=()=>{playing=!playing;$("pb").textContent=playing?"pause":"play day cycle"};
+$("pb").onclick=()=>{playing=!playing;$("pb").textContent=playing?"pause":"play"};
 
 (function loop(){
   if(playing){P.time+=.004;if(P.time>=24)P.time-=24;sync();needRender=true}
   if(needRender||playing){render();needRender=false;frame++}
   requestAnimationFrame(loop);
 })();
-sync();render();
+
+resize();sync();render();
 </script>
 </body>
 </html>
