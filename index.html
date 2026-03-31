@@ -95,13 +95,11 @@ const sm=(a,b,x)=>{const t=clp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
 
 let W,H;
 function resize(){
-  const container=C.parentElement;
-  const w=container.clientWidth;
-  const h=Math.round(w*9/16); // 16:9 aspect ratio
-  C.width=Math.round(w*.5);  // render at half res, CSS scales up
-  C.height=Math.round(h*.5);
+  const w=C.parentElement.clientWidth||innerWidth;
+  const h=Math.round(w*9/16);
+  W=C.width=Math.round(w*.5);
+  H=C.height=Math.round(h*.5);
   C.style.height=h+'px';
-  W=C.width; H=C.height;
   needRender=true;
 }
 addEventListener("resize",resize);
@@ -413,6 +411,7 @@ $("pb").onclick=()=>{playing=!playing;$("pb").textContent=playing?"pause":"play"
 })();
 
 resize();sync();render();
+setTimeout(()=>{resize();needRender=true},200);
 </script>
 </body>
 </html>
