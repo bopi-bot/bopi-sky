@@ -209,7 +209,7 @@ function pixel(vz,va,sz,saz,sunAlt,turb,exp,zenAbs,coeffs){
   if(sunAlt>-.2){
     const sR=.00465*RD;
     const gl=Math.exp(-gamma*gamma/(.005*.005))*.15;
-    const dk=sm(sR*1,sR*2.5,gamma);
+    const dk=sm(sR*2.5,sR*1,gamma);
     const sG=sm(-.1,.18,sunAlt),sB=sm(.02,.32,sunAlt);
     const fade=sm(-.2,.05,sunAlt);
     const si=(dk*15+gl*8)*fade;
