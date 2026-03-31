@@ -243,11 +243,11 @@ function render(){
   const zenAbs=calcZenitalAbsolutes(turb,sz);
   const coeffs=calcCoeffs(turb);
 
-  // smooth transitions
-  const nightF=sm(.05,-.2,sunAlt);     // 0 in day, 1 at night
-  const dayF=sm(-.15,.25,sunAlt);      // 1 in full day, 0 at night
-  const sunsetF=sm(-.08,.1,sunAlt)*(1-sm(.15,.4,sunAlt)); // peak near horizon
-  const preethamF=sm(-.05,.1,sunAlt);  // fade out preetham below -5 deg
+  // single smooth day-to-night transition
+  // preetham handles the sky color at all sun angles naturally
+  // we only blend to night sky when the sun is well below horizon
+  const nightF=sm(-.05,-.25,sunAlt);
+  const sunsetF=sm(-.1,.12,sunAlt)*(1-sm(.15,.45,sunAlt));
   const time=frame;
 
   const horizY=H; // full sky, no ground
@@ -265,22 +265,18 @@ function render(){
       const cosG=Math.sin(vz)*Math.sin(sz)*Math.cos(va-saz)+cosV*Math.cos(sz);
       const gamma=Math.acos(clp(cosG,-1,1));
 
-      // start with night sky
-      const nz=.003+.006*(1-vz/(PI/2));
-      let r=nz*.35, g=nz*.45, b=nz*1.1;
+      // preetham sky color
+      const sc=skyColorPreetham(vz,va,zenAbs,coeffs,sz,saz);
+      const sunI=Math.max(Math.cos(sz),0);
+      const scI=.25+sunI*.75;
+      let r=sc.r*scI, g=sc.g*scI, b=sc.b*scI;
 
-      // preetham sky (only when sun is above -5 deg)
-      if(preethamF>0){
-        const sc=skyColorPreetham(vz,va,zenAbs,coeffs,sz,saz);
-        const sunI=Math.max(Math.cos(clp(sz,0,1.4835)),0);
-        const scI=(.25+sunI*.75)*preethamF;
-        r=mix(r,sc.r*scI,preethamF);
-        g=mix(r,sc.g*scI,preethamF);
-        // recompute to avoid cascading mix
-        const nr=mix(nz*.35,sc.r*scI,preethamF);
-        const ng=mix(nz*.45,sc.g*scI,preethamF);
-        const nb=mix(nz*1.1,sc.b*scI,preethamF);
-        r=nr;g=ng;b=nb;
+      // blend to night sky when sun is well below horizon
+      if(nightF>0){
+        const nz=.003+.006*(1-vz/(PI/2));
+        r=mix(r,nz*.35,nightF);
+        g=mix(g,nz*.45,nightF);
+        b=mix(b,nz*1.1,nightF);
       }
 
       // sunset glow (supplementary to preetham which is subtle at low sun)
@@ -293,13 +289,14 @@ function render(){
         if(opp>.1&&hzP>.4){const bl=sunsetF*hzP*opp*.2*(turb/5);r+=bl*.8;g+=bl*.18}
       }
 
-      // sun disk
-      if(sunAlt>-.12){
+      // sun disk -- fades naturally with sky brightness
+      if(sunAlt>-.2){
         const sR=.00465*RD;
         const gl=Math.exp(-gamma*gamma/(.013*.013))*.3;
         const dk=sm(sR*2.5,sR*1,gamma);
         const sG=sm(-.1,.18,sunAlt),sB=sm(.02,.32,sunAlt);
-        const si=dk*40+gl*18;
+        const fade=sm(-.2,.05,sunAlt); // fade disk out below -5 deg
+        const si=(dk*40+gl*18)*fade;
         r+=si;g+=sG*si;b+=sB*si;
       }
 
