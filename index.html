@@ -176,7 +176,7 @@ function perez(zenith,gamma,c){
 function yxyToRgb(Y,x,y){
   if(y<=0)return{r:0,g:0,b:0};
   const X=x/y*Y, Z=(1-x-y)/y*Y;
-  const gc=v=>Math.max(0,Math.min(1,Math.pow(clp(v,0,1e6),1/1.8)));
+  const gc=v=>clp(v,0,1);
   return{
     r:gc( 3.2406*X-1.5372*Y-0.4986*Z),
     g:gc(-0.9689*X+1.8758*Y+0.0415*Z),
