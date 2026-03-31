@@ -208,11 +208,11 @@ function pixel(vz,va,sz,saz,sunAlt,turb,exp,zenAbs,coeffs){
   let r=sc.r*scI,g=sc.g*scI,b=sc.b*scI;
   if(sunAlt>-.2){
     const sR=.00465*RD;
-    const gl=Math.exp(-gamma*gamma/(.013*.013))*.3;
-    const dk=sm(sR*2.5,sR*1,gamma);
+    const gl=Math.exp(-gamma*gamma/(.005*.005))*.15;
+    const dk=sm(sR*1,sR*2.5,gamma);
     const sG=sm(-.1,.18,sunAlt),sB=sm(.02,.32,sunAlt);
     const fade=sm(-.2,.05,sunAlt);
-    const si=(dk*40+gl*18)*fade;
+    const si=(dk*15+gl*8)*fade;
     r+=si;g+=sG*si;b+=sB*si;
   }
   const tr=aces(r*exp),tg=aces(g*exp),tb=aces(b*exp);
