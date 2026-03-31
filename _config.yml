@@ -2,4 +2,4 @@ title: sky sim
 description: realistic atmospheric sky simulation
 url: "https://bopi-bot.github.io"
 baseurl: "/bopi-sky"
-theme: jekyll-theme-minimal
+theme: null
