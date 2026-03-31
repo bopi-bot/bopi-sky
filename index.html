@@ -34,23 +34,15 @@
   <div class="max-w-2xl mx-auto px-6 pt-8 pb-6">
     <p class="text-sm text-black/40 lowercase tracking-tight">atmospheric sky simulation</p>
     <h1 class="text-xl font-normal lowercase tracking-tight leading-snug mt-1">sky sim</h1>
-    <p class="text-sm text-black/50 lowercase leading-relaxed mt-2">preetham sky model with rayleigh and mie scattering. pure analytic daylight.</p>
+    <p class="text-sm text-black/50 lowercase leading-relaxed mt-2">preetham sky model. hemisphere projection looking straight up.</p>
   </div>
 
   <main class="max-w-2xl mx-auto px-6 pb-6">
-    <!-- canvases -->
-    <div class="flex flex-col gap-2">
-      <div class="relative">
-        <canvas id="cPan"></canvas>
-        <div class="absolute bottom-2 left-2 bg-black/20 backdrop-blur-md rounded px-2 py-1">
-          <span class="text-[0.625rem] text-white/50 lowercase">equirectangular</span>
-        </div>
-      </div>
-      <div class="relative">
-        <canvas id="cHem"></canvas>
-        <div class="absolute bottom-2 left-2 bg-black/20 backdrop-blur-md rounded px-2 py-1">
-          <span class="text-[0.625rem] text-white/50 lowercase">hemisphere</span>
-        </div>
+    <!-- canvas -->
+    <div class="relative">
+      <canvas id="sky"></canvas>
+      <div class="absolute bottom-2 left-2 bg-black/20 backdrop-blur-md rounded px-2 py-1">
+        <span class="text-[0.625rem] text-white/50 lowercase">hemisphere</span>
       </div>
     </div>
 
@@ -81,46 +73,40 @@
       </div>
       <div class="flex items-center gap-3">
         <label class="text-xs text-black/40 lowercase min-w-[3.5rem]">turbidity</label>
-        <input type="range" id="cb" min="1" max="10" step="0.1" value="3" class="flex-1">
-        <span class="text-xs text-black/40 min-w-[3rem] text-right font-mono" id="vb">3.0</span>
+        <input type="range" id="cb" min="1" max="10" step="0.1" value="2.5" class="flex-1">
+        <span class="text-xs text-black/40 min-w-[3rem] text-right font-mono" id="vb">2.5</span>
       </div>
       <div class="flex items-center gap-3">
         <label class="text-xs text-black/40 lowercase min-w-[3.5rem]">exposure</label>
-        <input type="range" id="ce" min="0.1" max="3" step="0.05" value="1.0" class="flex-1">
-        <span class="text-xs text-black/40 min-w-[3rem] text-right font-mono" id="ve">1.00</span>
+        <input type="range" id="ce" min="0.1" max="3" step="0.05" value="1.2" class="flex-1">
+        <span class="text-xs text-black/40 min-w-[3rem] text-right font-mono" id="ve">1.20</span>
       </div>
     </div>
 
-    <p class="text-xs text-black/30 lowercase mt-4 leading-relaxed">based on the preetham 1999 analytic daylight model. scratchapixel tutorial for rayleigh/mie scattering fundamentals.</p>
+    <p class="text-xs text-black/30 lowercase mt-4 leading-relaxed">based on the preetham 1999 analytic daylight model. hemisphere shows equidistant fisheye projection -- center is zenith, edge is horizon. north at top.</p>
   </main>
 
 <script>
 "use strict";
-const CP=document.getElementById("cPan"),CH=document.getElementById("cHem");
-const XP=CP.getContext("2d"),XH=CH.getContext("2d");
+const C=document.getElementById("sky"),X=C.getContext("2d");
 const PI=Math.PI,TAU=PI*2,DG=PI/180,RD=180/PI;
 const clp=(x,a,b)=>x<a?a:x>b?b:x;
 const sm=(a,b,x)=>{const t=clp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
 
 function resize(){
-  const w=CP.parentElement.clientWidth||innerWidth;
-  // equirectangular: 2:1 aspect, full res
-  PW=CP.width=w;
-  PH=CP.height=Math.round(w*.5);
-  CP.style.height=PH+'px';
-  // hemisphere: square canvas, full width
-  HW=CH.width=w;
-  HH=CH.height=w;
-  CH.style.height=w+'px';
+  const w=C.parentElement.clientWidth||innerWidth;
+  W=C.width=w;
+  H=C.height=w;
+  C.style.height=w+'px';
   needRender=true;
 }
 addEventListener("resize",resize);
 
 // --- params ---
-const P={time:12,lat:21,lon:105.85,tz:7,turb:3,exp:1,date:new Date(2026,5,21)};
-let playing=false,needRender=false,PW=1,PH=1,HW=1,HH=1;
+const P={time:12,lat:21,lon:105.85,tz:7,turb:2.5,exp:1.2,date:new Date(2026,5,21)};
+let playing=false,needRender=false,W=1,H=1;
 
-// --- solar position (full astronomical model) ---
+// --- solar position ---
 function dayOfYear(d){const s=new Date(d.getFullYear(),0,0);return Math.floor((d-s)/86400000)}
 
 function solarPosition(hours,lat,lon,tz,date){
@@ -182,7 +168,7 @@ function yxyToRgb(Y,x,y){
   };
 }
 
-function skyColor(vz,va,zenAbs,coeffs,sunZen,sunAz){
+function skyColorPreetham(vz,va,zenAbs,coeffs,sunZen,sunAz){
   const cosG=Math.sin(vz)*Math.sin(sunZen)*Math.cos(va-sunAz)+Math.cos(vz)*Math.cos(sunZen);
   const gamma=Math.acos(clp(cosG,-1,1));
   const pYzen=perez(0,sunZen,coeffs.Y);
@@ -194,73 +180,97 @@ function skyColor(vz,va,zenAbs,coeffs,sunZen,sunAz){
   return yxyToRgb(clp(Yp,0,1e6),clp(xp,0,1),clp(yp,0,1));
 }
 
+// --- ACES tonemap ---
 function aces(x){const a=2.51,b=.03,c=2.43,d=.59,e=.14;return clp((x*(a*x+b))/(x*(c*x+d)+e),0,1)}
-
-// pixel shader shared by both projections
-function pixel(vz,va,sz,saz,sunAlt,turb,exp,zenAbs,coeffs){
-  const cosG=Math.sin(vz)*Math.sin(sz)*Math.cos(va-saz)+Math.cos(vz)*Math.cos(sz);
-  const gamma=Math.acos(clp(cosG,-1,1));
-  const sc=skyColor(vz,va,zenAbs,coeffs,sz,saz);
-  const sunI=Math.max(Math.cos(sz),0);
-  const scI=.25+sunI*.75;
-  let r=sc.r*scI,g=sc.g*scI,b=sc.b*scI;
-  if(sunAlt>-.2){
-    const sR=.00465*RD;
-    const gl=Math.exp(-gamma*gamma/(.003*.003))*.08;
-    const dk=sm(sR*2.5,sR*1,gamma);
-    const sG=sm(-.1,.18,sunAlt),sB=sm(.02,.32,sunAlt);
-    const fade=sm(-.2,.05,sunAlt);
-    const si=(dk*20+gl*5)*fade;
-    r+=si;g+=sG*si;b+=sB*si;
-  }
-  const tr=aces(r*exp),tg=aces(g*exp),tb=aces(b*exp);
-  return[Math.pow(tr,1/2.2)*255|0,Math.pow(tg,1/2.2)*255|0,Math.pow(tb,1/2.2)*255|0];
-}
 
 // --- render ---
 function render(){
+  const img=X.createImageData(W,H);
+  const d=img.data;
+
   const sun=solarPosition(P.time,P.lat,P.lon,P.tz,P.date);
   const sz=sun.zenith,saz=sun.azimuth,sunAlt=sun.alt;
   const turb=P.turb,exp=P.exp;
+
   const zenAbs=calcZenitalAbsolutes(turb,sz);
   const coeffs=calcCoeffs(turb);
 
-  // --- equirectangular ---
-  const imgP=XP.createImageData(PW,PH);
-  const dP=imgP.data;
-  for(let y=0;y<PH;y++){
-    const vz=(y/PH)*PI/2;
-    for(let x=0;x<PW;x++){
-      const i=(y*PW+x)<<2;
-      const va=(x/PW-.5)*TAU;
-      const c=pixel(vz,va,sz,saz,sunAlt,turb,exp,zenAbs,coeffs);
-      dP[i]=c[0];dP[i+1]=c[1];dP[i+2]=c[2];dP[i+3]=255;
-    }
-  }
-  XP.putImageData(imgP,0,0);
+  const cx=W/2,cy=H/2,rad=cx*.95;
 
-  // --- hemisphere ---
-  const imgH=XH.createImageData(HW,HH);
-  const dH=imgH.data;
-  const cx=HW/2,cy=HH/2,rad=cx*.95;
-  for(let y=0;y<HH;y++){
-    for(let x=0;x<HW;x++){
-      const i=(y*HW+x)<<2;
-      const dx=(x-cx)/rad,dy=(y-cy)/rad;
+  // sun direction in cartesian
+  const sunX=Math.sin(sz)*Math.cos(saz);
+  const sunY=Math.cos(sz);
+  const sunZ=Math.sin(sz)*Math.sin(saz);
+
+  for(let py=0;py<H;py++){
+    for(let px=0;px<W;px++){
+      const i=(py*W+px)<<2;
+      const dx=(px-cx)/rad,dy=(py-cy)/rad;
       const dist=Math.sqrt(dx*dx+dy*dy);
       if(dist>1){
-        // outside circle -- cream background
-        dH[i]=255;dH[i+1]=251;dH[i+2]=240;dH[i+3]=255;
+        d[i]=255;d[i+1]=251;d[i+2]=240;d[i+3]=255;
         continue;
       }
-      // equidistant: r = dist * PI/2, so dist=0 is zenith, dist=1 is horizon
+
+      // equidistant fisheye: center=zenith, edge=horizon
       const vz=dist*PI/2;
-      const va=Math.atan2(dx,-dy); // north = top, east = right
-      const c=pixel(vz,va,sz,saz,sunAlt,turb,exp,zenAbs,coeffs);
-      dH[i]=c[0];dH[i+1]=c[1];dH[i+2]=c[2];dH[i+3]=255;
+      const va=Math.atan2(dx,-dy);
+      const cosV=Math.cos(vz);
+
+      // direction vector
+      const dirX=Math.sin(vz)*Math.cos(va);
+      const dirY=cosV;
+      const dirZ=Math.sin(vz)*Math.sin(va);
+
+      // angular distance to sun
+      const cosG=dirX*sunX+dirY*sunY+dirZ*sunZ;
+      const gamma=Math.acos(clp(cosG,-1,1));
+
+      // preetham sky
+      const sc=skyColorPreetham(vz,va,zenAbs,coeffs,sz,saz);
+
+      // horizon brightening -- real skies are brighter near horizon due to longer path length
+      const horizBright=1+sm(.6,PI/2,vz)*.4;
+
+      let r=sc.r*horizBright,g=sc.g*horizBright,b=sc.b*horizBright;
+
+      // aerial perspective / atmospheric haze near horizon
+      if(vz>PI/4){
+        const hazeF=sm(PI/4,PI/2,vz);
+        // haze color from preetham at horizon opposite to sun (neutral)
+        const hzR=.65,hzG=.72,hzB=.82;
+        r=mix(r,hzR,hazeF*.35);
+        g=mix(g,hzG,hazeF*.35);
+        b=mix(b,hzB,hazeF*.35);
+      }
+
+      // sun disk + realistic atmospheric glow
+      if(sunAlt>-.2){
+        const sR=.00465*RD;
+        // tight disk
+        const dk=sm(sR*2.5,sR*1,gamma);
+        // forward mie scattering glow (asymmetric -- elongated toward viewer)
+        const mieG=Math.exp(-gamma/.12)*.02;
+        // rayleigh aureole (small tight glow)
+        const rayG=Math.exp(-gamma*gamma/(.003*.003))*.06;
+        // circumsolar glow (broad, from aerosols)
+        const circG=Math.exp(-gamma/.04)*.04;
+        // sunset color shift
+        const sG=sm(-.1,.18,sunAlt),sB=sm(.02,.32,sunAlt);
+        const fade=sm(-.2,.05,sunAlt);
+        const si=(dk*20+rayG*10+mieG*12+circG*8)*fade;
+        r+=si;g+=sG*si;b+=sB*si;
+      }
+
+      // tonemap + gamma
+      const tr=aces(r*exp),tg=aces(g*exp),tb=aces(b*exp);
+      d[i]=Math.pow(tr,1/2.2)*255|0;
+      d[i+1]=Math.pow(tg,1/2.2)*255|0;
+      d[i+2]=Math.pow(tb,1/2.2)*255|0;
+      d[i+3]=255;
     }
   }
-  XH.putImageData(imgH,0,0);
+  X.putImageData(img,0,0);
 }
 
 // --- UI ---
